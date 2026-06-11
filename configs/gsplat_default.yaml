@@ -1,0 +1,16 @@
+# gsplat 학습 하이퍼파라미터 (Phase 5) — STUB
+# SPEC 필수 설정을 박아둔다. 프레임워크(gsplat simple_trainer / nerfstudio splatfacto) 택일 후 보강.
+
+# --- 필수 (SPEC Phase 5) ---
+pose_optimization: false      # 카메라 포즈 고정 (SLAM 포즈를 신뢰, camera-opt OFF)
+depth_supervision: true       # depth loss 활성 (Phase 1 depth를 데이터셋에 포함)
+max_iterations: 30000         # 오프라인이므로 품질 우선
+
+# --- 평가/holdout (Phase 6) ---
+holdout_every: 8              # 매 8번째 키프레임을 평가용으로 제외
+
+# --- 후처리 (Phase 6, 08_postprocess.py) ---
+postprocess:
+  opacity_prune: true
+  sh_degree_reduce: [3, 1]    # SH degree 3 → 1 축소 옵션
+  compress: true

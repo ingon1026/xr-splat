@@ -1,0 +1,33 @@
+name: xrsplat
+# 재현용 환경 정의. CUDA 12.1 격리 (시스템 CUDA 13.1과 분리; 13.1 드라이버 하위호환).
+# 실제 부트스트랩은 staged 스크립트(build_xrsplat_env.sh) 사용 — core 먼저, 학습 스택은 Phase 5 직전.
+channels:
+  - pytorch
+  - nvidia
+  - nvidia/label/cuda-12.1.0
+  - conda-forge
+dependencies:
+  - python=3.10
+  - cuda-toolkit=12.1
+  - cuda-nvcc=12.1
+  - pytorch=2.1.2
+  - pytorch-cuda=12.1
+  - torchvision=0.16.2
+  - pip
+  - pip:
+      # --- core: Phase 1-4 (추출 / SLAM 연동 / TUM→COLMAP 변환 / 검증) ---
+      - numpy==1.26.4
+      - scipy
+      - opencv-python
+      - open3d==0.18.0
+      - pyrealsense2
+      - plyfile
+      - tqdm
+      - imageio
+      - matplotlib
+      - pyyaml
+      - pytest
+      # --- Phase 5 학습 스택: 호환성 확인 후 별도 설치 (SPEC Phase 5 "택일") ---
+      # gsplat simple_trainer 또는 nerfstudio splatfacto 중 설치 깔끔한 쪽 선택 후 활성화
+      # - gsplat
+      # - nerfstudio

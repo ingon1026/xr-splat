@@ -1,0 +1,24 @@
+# 데이터·산출물: git엔 "재현 방법"만, 결과물(.bag/.ply 등)은 별도 배포 (SPEC §5.1)
+data/raw/*
+data/processed/*
+outputs/*
+logs/
+
+# 대용량 바이너리·체크포인트
+*.bag
+*.ply
+*.osa
+*.ckpt
+*.pth
+
+# 파이썬·환경 캐시
+__pycache__/
+*.pyc
+.venv/
+wandb/
+.DS_Store
+
+# 디렉토리 구조 유지용 .gitkeep은 커밋 (SPEC §5.2)
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!outputs/.gitkeep
