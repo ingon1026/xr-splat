@@ -1,50 +1,146 @@
-# XR-Splat
+<div align="center">
 
-> Decoupled SLAM + Gaussian Splatting 파이프라인 — XR용 실사급 공간 자산(.ply)을 구축한다.
-> ORB-SLAM3(로컬라이제이션)와 gsplat(실사화)을 분리하고, SLAM 포즈를 **고정 입력**으로 학습한다.
+# xr-splat
 
-<!-- TODO: 티저 (최종 렌더링 GIF / before-after) — docs/assets -->
+**Decoupled SLAM × Gaussian Splatting pipeline for photorealistic XR spaces**
 
-## Pipeline
-```mermaid
-flowchart LR
-    A[D455 .bag] --> B[01 추출<br/>TUM RGB-D]
-    B --> C[02 ORB-SLAM3<br/>RGB-D]
-    C --> D[KeyFrameTrajectory.txt<br/>Twc + Atlas map]
-    D --> E[03 TUM→COLMAP<br/>Tcw 역변환]
-    B --> F[04 depth 역투영<br/>pointcloud]
-    E --> G[05 validate poses<br/>벽 한 겹 정합]
-    F --> G
-    G -->|PASS| H[06 gsplat 학습<br/>포즈고정 + depth]
-    H --> I[scene.ply]
-    I --> J[07 평가<br/>PSNR/SSIM/LPIPS]
-    I --> K[08 후처리<br/>prune/SH/압축]
-```
+*Track with ORB-SLAM3. Render with gsplat. Share one coordinate frame.*
+
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![CUDA](https://img.shields.io/badge/CUDA-12.1-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Ubuntu%2024.04-E95420?logo=ubuntu&logoColor=white)](#installation)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
+
+<br>
+
+<!-- TODO(M3): replace with rendered scene teaser GIF -->
+<img src="docs/assets/teaser_placeholder.png" alt="Photorealistic Gaussian Splatting reconstruction (coming at M3)" width="85%">
+
+*Teaser render coming at milestone M3 — first full scene reconstruction.*
+
+</div>
+
+---
 
 ## Why decoupled?
-coupled 방식(SplaTAM/GS-SLAM/Photo-SLAM/LoopSplat)은 품질·정확도·속도가 미달 → 역할 분리.
-두 맵이 동일 SLAM 포즈에서 나와 좌표계를 자동 공유한다. 상세: [docs/research-note.md](docs/research-note.md).
 
-## Installation
-WSL2(Ubuntu) 전제. <!-- TODO: environment.yml / ORB-SLAM3 빌드 / 트러블슈팅 -->
-```bash
-conda env create -f environment.yml   # 또는 staged: build_xrsplat_env.sh
-# ORB-SLAM3: third_party/ORB_SLAM3 (submodule) 빌드 — docs 추가 예정
+Coupled Gaussian-SLAM systems (SplaTAM, GS-SLAM, Photo-SLAM, LoopSplat) estimate pose **and** optimize the map on a single Gaussian representation, in real time. In our experiments this traded away everything at once: rendering quality below photorealistic, tracking weaker than mature SLAM, and slow runtimes.
+
+**xr-splat splits the two jobs.** ORB-SLAM3 does what it does best — accurate keyframe poses, loop closure, relocalization. gsplat does what it does best — offline, unconstrained photorealistic optimization. Because the Gaussian map is trained directly on SLAM poses, **both maps share one coordinate frame by construction**: at runtime, a relocalized pose drops straight into the Gaussian renderer with zero alignment steps.
+
+## Pipeline
+
+```mermaid
+flowchart LR
+    subgraph OFFLINE["Offline · asset construction"]
+        A["RealSense D455<br>.bag capture"] --> B["01<br>TUM RGB-D<br>extraction"]
+        B --> C["02<br>ORB-SLAM3<br>(RGB-D)"]
+        C -->|"keyframe poses (Twc)"| D["03<br>TUM → COLMAP<br>conversion"]
+        B -->|"depth"| E["04<br>point cloud<br>init"]
+        D --> F["05 ✓<br>pose<br>validation"]
+        E --> F
+        F --> G["06<br>gsplat training<br>(poses frozen + depth loss)"]
+        G --> H["08<br>prune · compress"]
+    end
+    subgraph RUNTIME["Runtime · XR session"]
+        I["headset VIO"] --> J["relocalize once<br>vs ORB-SLAM3 map"]
+        J --> K["render scene.ply<br>from user pose"]
+    end
+    C -.->|"saved Atlas map"| J
+    H -.->|"scene.ply"| K
 ```
 
-## Usage
-<!-- TODO: 캡처 → 01~08 Quick Start (복붙 가능한 명령 블록) -->
+Every stage is an independent CLI script communicating through standard on-disk formats (TUM, COLMAP) — swap any stage without touching the rest.
 
 ## Results
-<!-- TODO: 정량 표 (COLMAP 포즈 vs ORB 포즈 PSNR/SSIM/LPIPS, ATE) + 데모 .ply (Releases) -->
+
+> **TBD — populated at milestone M3.**
+
+| Experiment | PSNR ↑ | SSIM ↑ | LPIPS ↓ | ATE ↓ |
+|---|---|---|---|---|
+| COLMAP poses (baseline) | — | — | — | — |
+| **ORB-SLAM3 poses (ours)** | — | — | — | — |
+
+Demo `.ply` assets will be distributed via [GitHub Releases](../../releases).
+
+## Installation
+
+Tested on **WSL2 (Ubuntu 24.04)** with an NVIDIA GPU (CUDA 12.1).
+
+```bash
+git clone --recursive https://github.com/ingon1026/xr-splat.git
+cd xr-splat
+conda env create -f environment.yml
+conda activate xrsplat
+```
+
+Build ORB-SLAM3 (submodule, with repo patches applied — **viewer must stay OFF on WSL2**):
+
+```bash
+bash third_party/build_orbslam3.sh   # applies repo patches, then builds
+```
+
+<details>
+<summary><b>WSL2 notes & common build errors</b></summary>
+
+- **RealSense capture**: live USB streaming on WSL2 is unreliable. Record `.bag` files with RealSense Viewer on Windows, then process them offline here (this pipeline is fully offline by design).
+- **Pangolin viewer crashes (ZINK/EGL)**: expected on WSLg — all scripts run ORB-SLAM3 headless; success is judged by `KeyFrameTrajectory.txt` output, not exit code.
+- **C++ standard build errors**: applied automatically by `third_party/patches/`.
+
+</details>
+
+## Usage
+
+```bash
+# 1. Extract capture → TUM RGB-D layout (also accepts TUM/Replica datasets directly)
+python scripts/01_extract_bag.py --input data/raw/room1.bag --scene room1
+
+# 2. Run ORB-SLAM3 (headless) → keyframe poses + Atlas map
+bash scripts/02_run_orbslam3.sh room1
+
+# 3. Convert poses to COLMAP format (Twc→Tcw, quaternion reorder)
+python scripts/03_tum_to_colmap.py --scene room1
+
+# 4–5. Build init point cloud, then validate pose conversion  ← gate: must PASS
+python scripts/04_make_pointcloud.py --scene room1
+python scripts/05_validate_poses.py --scene room1
+
+# 6. Train gsplat (poses frozen, depth supervision on)
+bash scripts/06_train_gsplat.sh room1
+
+# 7–8. Evaluate, then prune/compress for XR deployment
+python scripts/07_evaluate.py --scene room1
+python scripts/08_postprocess.py --scene room1
+```
+
+Data and outputs are **not** stored in this repo — see [`data/README.md`](data/README.md) for how to obtain public datasets (TUM RGB-D, Replica) or capture your own.
 
 ## Repository structure
-`scripts/` 파이프라인 단계(CLI) · `pipeline/` 공유 모듈 · `configs/` 설정 ·
-`third_party/ORB_SLAM3` (submodule) · `data/`·`outputs/` (gitignore).
 
-## Third-party licenses
-- **ORB-SLAM3** (GPLv3): 별도 프로세스로 실행, submodule 참조. 자체 코드는 MIT.
-- **gsplat** (Apache 2.0). 원조 Inria 3DGS 코드 사용 시 비상업 연구용 제한 고지.
+```
+configs/        ORB-SLAM3 & training configs (auto-generated from capture intrinsics)
+scripts/        pipeline stages 01–08, each an independent CLI
+pipeline/       shared modules (format conversion, geometry utils)
+third_party/    ORB-SLAM3 as a git submodule + build patches
+docs/           research notes, capture guide, README assets
+data/ outputs/  gitignored — reproduced locally by running the pipeline
+```
+
+## Roadmap
+
+- [x] **M0** — scaffolding, ORB-SLAM3 headless build, TUM example run
+- [ ] **M1** — end-to-end on public dataset, ORB poses vs COLMAP poses ≤ 0.5 dB
+- [ ] **M2** — end-to-end on own D455 capture
+- [ ] **M3** — post-processing, results & teaser
+- [ ] **M4** — public release
+
+## License
+
+Project code is released under the **MIT License**.
+
+Third-party components keep their own licenses: [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) (GPLv3, used as an external process via a git submodule) · [gsplat](https://github.com/nerfstudio-project/gsplat) (Apache 2.0).
 
 ## Acknowledgements
-<!-- TODO -->
+
+Built on the shoulders of [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3), [gsplat](https://github.com/nerfstudio-project/gsplat), and the original [3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) work. Datasets: [TUM RGB-D](https://cvg.cit.tum.de/data/datasets/rgbd-dataset), [Replica](https://github.com/facebookresearch/Replica-Dataset).
