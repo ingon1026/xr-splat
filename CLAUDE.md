@@ -24,4 +24,5 @@
 
 ## 6. 커밋 & 결정
 - 커밋은 **Phase 단위 conventional commits**(`feat:`, `fix:`, `docs:`, `test:`)로 만든다.
+- **커밋에 `Co-Authored-By` 등 AI 귀속 트레일러를 절대 넣지 않는다. author/committer는 항상 `ingon1026`.**
 - **막히는 결정(라이브러리 선택, 명세 모호함)은 임의로 정하지 않고 사용자에게 질문**한다.
