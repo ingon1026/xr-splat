@@ -27,7 +27,10 @@ dependencies:
       - matplotlib
       - pyyaml
       - pytest
-      # --- Phase 5 학습 스택: 호환성 확인 후 별도 설치 (SPEC Phase 5 "택일") ---
-      # gsplat simple_trainer 또는 nerfstudio splatfacto 중 설치 깔끔한 쪽 선택 후 활성화
+      # --- Phase 5 학습 스택 (SPEC Phase 5 "택일"; 본설치는 Phase 5 직전) ---
+      # gsplat 1.5.x는 torch 2.1.2/cu121에 호환 검증됨(rasterization OK). 단 CUDA 빌드 prereq 2개 필요:
+      #   conda: cuda-cccl=12.1.55  (nv/target=libcu++ 헤더; 없으면 cuda_bf16.hpp 빌드 실패)
+      #   pip:   setuptools<70      (pkg_resources; 없으면 torch.utils.cpp_extension import 실패)
+      # 그 후: gsplat simple_trainer 또는 nerfstudio splatfacto 중 설치 깔끔한 쪽 택일
       # - gsplat
       # - nerfstudio
