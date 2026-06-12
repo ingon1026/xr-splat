@@ -1,19 +1,78 @@
-# D455 캡처 가이드
+# D455 캡처 가이드 (M2)
 
-오프라인 처리 파이프라인이므로 라이브 스트리밍은 불필요하다. Windows에서 녹화한 `.bag`을
-WSL2로 옮겨 처리한다 (SPEC §1.1 Plan A).
+오프라인 파이프라인이므로 라이브 스트리밍은 불필요하다. Windows에서 **Intel RealSense Viewer**로
+`.bag`을 녹화 → WSL2로 옮겨 `01_extract_bag.py`로 처리한다 (SPEC §1.1 Plan A).
 
-## 캡처 절차 (Plan A)
-1. Windows에서 **Intel RealSense Viewer**로 녹화 → `.bag` 생성
-2. `.bag`을 WSL2 **내부 디스크**로 복사 (`/mnt/c/...` 경유보다 I/O 빠름)
-3. `01_extract_bag.py`로 오프라인 파싱 (카메라 불필요, `rs.config.enable_device_from_file()`)
+> **호환성 핵심**: Viewer의 Record 버튼과 `01_extract_bag.py`의 `enable_device_from_file()`은
+> **동일한 SDK rosbag 스키마**를 쓴다(둘 다 librealsense `rs2::recorder`/reader). 토픽명·메타데이터는
+> 구조적으로 일치하므로 따로 변환할 필요가 없다. 추출 실패는 거의 전부 **녹화 시점 설정** 문제다(아래).
 
-## 권장 캡처 설정 (SPEC §1.2)
-- 해상도: **color 1280x720 @ 30fps**, **depth 848x480 @ 30fps** (D455 depth 최적은 848x480)
-- **auto-exposure / auto-white-balance OFF** (수동 고정) — 프레임 간 색 일관성
-- depth↔color 해상도가 다르므로 **align(depth→color)** 필수 (`rs.align`)
-- depth scale: D455 기본 1mm (`depth_scale=0.001`). 코드 하드코딩 금지, SDK에서 읽을 것
+---
 
-## 촬영 요령
-- 천천히 이동, 같은 영역을 다각도로
-- **시작 지점으로 복귀**하여 루프 클로저 유도
+## 1. 녹화 시점 필수 설정 (이게 어긋나면 추출이 0프레임/오류)
+
+RealSense Viewer 좌측 패널에서 녹화 전 확인:
+
+| 스트림 | 해상도 | FPS | 포맷 | 비고 |
+|---|---|---|---|---|
+| **Stereo Module → Depth** | 848×480 | 30 | Z16 | D455 depth 최적 해상도 |
+| **RGB Camera → Color** | 1280×720 | 30 | **RGB8** (또는 BGR8) | align 기준 스트림 |
+
+**반드시 지킬 5가지** (각 항목은 추출 코드의 특정 가정에 대응):
+
+1. **Depth + Color 둘 다 Enable** — 한쪽만 녹화하면 `get_depth_frame()/get_color_frame()`이
+   null → 모든 프레임 skip → 매칭 0쌍으로 추출이 비정상 종료한다.
+2. **Motion Module(IMU accel/gyro) OFF** — 이 파이프라인은 RGB-D(관성 미사용)다. IMU를 켜면
+   200~400Hz 모션 프레임셋이 영상 프레임 사이에 끼어 프레임번호 단조성을 깨고 추출이 조기 종료될
+   수 있다. 켤 이유가 없으니 끈다.
+3. **Color 포맷 = RGB8 또는 BGR8** — YUYV 등 다른 포맷은 추출기가 BGR 변환을 보장하지 않아
+   색이 깨진다.
+4. **두 스트림 같은 FPS(30/30)** — SDK syncer가 시간 매칭 안 되는 프레임셋을 버린다. fps가
+   다르면 매칭쌍이 급감한다.
+5. **Auto-Exposure / Auto-White-Balance OFF (수동 고정)** — 프레임 간 색·밝기 일관성 확보.
+   gsplat은 노출이 흔들리면 floater/뿌연 결과가 된다. (고정 방법 ↓ §2)
+
+> depth scale: 추출기는 bag에서 SDK depth_scale(보통 0.001 m/unit)을 직접 읽어 mm(×1000)로
+> 저장한다. `--depth-scale 1000`(기본값)이 ORB-SLAM3 `DepthMapFactor`다. SDK 값과 혼동 금지.
+
+## 2. 노출·화이트밸런스 고정 방법
+
+조명·장면마다 적정 노출이 다르므로 **고정값을 외우지 말고 측정해서 잠근다**:
+
+1. 촬영할 공간을 평소 조명으로 켜고, 카메라를 대표 시점에 **정지**시킨다.
+2. Auto-Exposure를 **잠깐 켠 상태**로 화면이 안정될 때까지 둔다.
+3. 안정된 **Exposure 값을 읽고**, Auto-Exposure를 **OFF**로 바꾼 뒤 그 값을 수동 입력해 잠근다.
+4. White Balance도 동일하게: 실내 조명 기준 **약 4500~5000K**에서 시작, 색감 확인 후 고정.
+5. 실내 일반 조명의 Exposure 시작 범위는 대략 **8000~16000(μs)** — 어두우면 값을 키우되,
+   너무 키우면 빠른 이동에서 모션블러가 심해지니 조명을 보강하는 편이 낫다.
+
+## 3. 스캔 동선 체크리스트
+
+- [ ] **천천히** 이동 — 빠르면 depth 노이즈·모션블러·트래킹 로스
+- [ ] 같은 영역을 **다각도**로(좌/우/위/아래에서) — 가우시안 커버리지 확보
+- [ ] **루프 닫기**: 시작 지점으로 복귀해 같은 장면을 다시 봄 → ORB-SLAM3 loop closure로 드리프트 보정
+- [ ] 한 바퀴 **연속**으로(트래킹 끊기지 않게). 끊기면 처음부터 다시
+- [ ] 적정 거리 유지: D455는 **0.6~4m**가 depth 신뢰 구간. 너무 가까우면 depth가 빈다
+
+### 피해야 할 것
+
+- **반사면**(거울·유리·광택 금속·모니터 화면): depth가 뚫리거나 튄다 → 빈 구멍/floater
+- **무텍스처 벽**(흰 벽·단색 면): ORB 특징점이 안 잡혀 트래킹 로스. 포스터·물체로 텍스처 보강
+- **급회전**(제자리 빠른 팬): 프레임 간 겹침 부족 → 트래킹 로스. 회전은 천천히, 이동과 섞어서
+- **움직이는 물체**(사람·반려동물): 정적 장면 가정 위반 → 포즈·맵 오염
+- **역광·창문 직사광**: 노출 고정과 충돌, 하이라이트 클리핑
+
+## 4. 추출 (bag → TUM RGB-D)
+
+```bash
+# .bag을 WSL2 내부 디스크로 복사 후 (/mnt/c 경유보다 빠름)
+conda activate xrsplat
+python scripts/01_extract_bag.py bag \
+    --bag   data/raw/<scene>.bag \
+    --out   data/processed/<scene> \
+    --depth-scale 1000          # = ORB-SLAM3 DepthMapFactor
+# 이후 02_run_orbslam3.sh → 03 → 04 → 05(게이트) → 06 학습 → 07/08
+```
+
+추출 로그에서 확인할 것: `bag 추출: N 프레임`(N>0), `color intrinsics ... 848x480 또는 1280x720`,
+`매칭 실패로 버린 rgb 프레임`이 과도하지 않은지(과도하면 fps 불일치 의심).
