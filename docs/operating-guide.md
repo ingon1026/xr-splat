@@ -49,14 +49,14 @@
   2. M1(공개 데이터셋 E2E, COLMAP 대비 PSNR 차 ≤ 0.5dB) 전에 자체 캡처 디버깅 금지
 - Phase 3 완료 시: 서브에이전트 적대적 리뷰(SPEC 함정 체크리스트 4개) 후 커밋 — CLAUDE.md에 규칙 있음.
 
-## 4. 진행 현황 스냅샷 (2026-06-11 기준)
+## 4. 진행 현황 스냅샷 (2026-06-12 기준)
 
-- 완료: Phase 0 (스캐폴딩, ORB-SLAM3 빌드+패치, M0 통과), Phase 1 (01_extract_bag.py, 3개 입력 모드 검증)
+- 완료: Phase 0 (스캐폴딩, ORB-SLAM3 빌드+패치, M0 통과), Phase 1 (01_extract_bag.py, 3개 입력 모드 검증), Phase 2 (02_run_orbslam3.sh headless, fr1/desk 127 KF + Atlas .osa), Phase 3 (03_tum_to_colmap.py + pipeline/colmap_convert.py, 단위테스트 5 + 적대적 리뷰 통과)
 - 확정된 환경 사실: Ubuntu 24.04/WSL2, RTX 4070 Ti 12GB, torch 2.1.2/cu121
   - gsplat 1.5.3 호환 확정 (prereq: cuda-cccl=12.1.55, setuptools<70 — environment.yml에 기록됨)
   - WSLg에서 ORB-SLAM3 뷰어 항상 크래시 → 전 단계 headless 고정, 판정은 출력 파일 기준 (CLAUDE.md §4)
   - RealSense 라이브 스트리밍은 WSL2에서 비신뢰 → 캡처는 Windows RealSense Viewer로 .bag 녹화 (Plan A)
-- 다음: Phase 2 (02_run_orbslam3.sh, intrinsics.json→yaml 자동생성, DepthMapFactor 일치, headless)
+- 다음: Phase 4 (04_make_pointcloud.py + 05_validate_poses.py "벽 한 겹" 게이트 — 05 PASS 전 gsplat 학습 금지). Phase 3 기하검증도 05에서 닫힘
 - GitHub: ingon1026/xr-splat (private). 푸시 전 히스토리 대용량 파일 검사 필수 (특히 ORBvoc).
 
 ## 5. 나중에 필요해질 지식 (대화에서 나온 결론 요약)
