@@ -14,10 +14,9 @@
 
 <br>
 
-<!-- TODO(M3): replace with rendered scene teaser GIF -->
-<img src="docs/assets/teaser_placeholder.png" alt="Photorealistic Gaussian Splatting reconstruction (coming at M3)" width="85%">
+<img src="docs/assets/teaser.gif" alt="Fly-through of the reconstructed TUM fr1/desk scene (3D Gaussian Splatting)" width="85%">
 
-*Teaser render coming at milestone M3 — first full scene reconstruction.*
+*Fly-through of the reconstructed **TUM fr1/desk** scene — gsplat, 30k iterations, frozen ORB-SLAM3 poses.*
 
 </div>
 
@@ -55,12 +54,25 @@ Every stage is an independent CLI script communicating through standard on-disk 
 
 ## Results
 
-> **TBD — populated at milestone M3.**
+**Milestone M1 — public-dataset end-to-end validation.** The decoupled pipeline is only as
+good as the poses it is fed, so we render the *same scene* twice — once from ORB-SLAM3 poses,
+once from COLMAP SfM poses — under an identical protocol and compare. The gap is **0.13 dB**
+(well within the ≤ 0.5 dB bar), and ORB-SLAM3's absolute trajectory error is actually *lower*
+than COLMAP's, confirming the SLAM poses are a sound foundation for Gaussian Splatting.
 
-| Experiment | PSNR ↑ | SSIM ↑ | LPIPS ↓ | ATE ↓ |
+| Pose source | PSNR ↑ | SSIM ↑ | LPIPS ↓ | ATE ↓ |
 |---|---|---|---|---|
-| COLMAP poses (baseline) | — | — | — | — |
-| **ORB-SLAM3 poses (ours)** | — | — | — | — |
+| COLMAP SfM (baseline) | 23.98 | 0.836 | 0.198 | 2.04 cm |
+| **ORB-SLAM3 (ours)** | 23.85 | 0.834 | 0.207 | **1.89 cm** |
+| Δ | **0.13** | 0.002 | 0.009 | — |
+
+> Scene: **TUM RGB-D fr1/desk**. Both models trained with the identical protocol — gsplat
+> **15k iterations**, `--refine-stop 7000` (densification stop) + means grad-clip, dense
+> depth supervision. Evaluated on a **common 16-view hold-out** (every 8th keyframe, same
+> indices for both, intersection only). PSNR/SSIM/LPIPS are the **per-view median**
+> (worst-view PSNR: ORB 20.22 / COLMAP 20.11). ATE is the Sim(3)-aligned RMSE of keyframe
+> centers against TUM `groundtruth.txt`. Reproduce with
+> [`scripts/07_evaluate.py`](scripts/07_evaluate.py) (writes `outputs/<scene>/eval_m1.json`).
 
 Demo `.ply` assets will be distributed via [GitHub Releases](../../releases).
 
@@ -132,9 +144,9 @@ data/ outputs/  gitignored — reproduced locally by running the pipeline
 ## Roadmap
 
 - [x] **M0** — scaffolding, ORB-SLAM3 headless build, TUM example run
-- [ ] **M1** — end-to-end on public dataset, ORB poses vs COLMAP poses ≤ 0.5 dB
+- [x] **M1** — end-to-end on public dataset, ORB poses vs COLMAP poses ≤ 0.5 dB (Δ 0.13 dB)
 - [ ] **M2** — end-to-end on own D455 capture
-- [ ] **M3** — post-processing, results & teaser
+- [x] **M3** — post-processing, results & teaser
 - [ ] **M4** — public release
 
 ## License

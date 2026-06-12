@@ -51,8 +51,9 @@
 
 ## 4. 진행 현황 스냅샷 (2026-06-12 기준)
 
-- 완료: **Phase 0~6 전부, M1 PASS** (공개 데이터셋 fr1/desk E2E). ORB vs COLMAP **PSNR Δ=0.13dB(≤0.5)**, **ATE ORB 1.9cm / COLMAP 2.0cm** → decoupled 파이프라인 타당성 입증.
+- 완료: **Phase 0~6 전부, M1 PASS, M3 완료** (공개 데이터셋 fr1/desk E2E). ORB vs COLMAP **PSNR Δ=0.13dB(≤0.5)**, **ATE ORB 1.9cm / COLMAP 2.0cm** → decoupled 파이프라인 타당성 입증.
   - Phase 2 headless 127 KF+Atlas / Phase 3 단위+적대적리뷰 / Phase 4 05 게이트 PASS / Phase 5 gsplat(포즈고정+depth, 30k 23dB) / Phase 6 평가+후처리.
+  - **M3**: README Results 표(median, ATE) + 각주(fr1/desk·hold-out 16뷰·15k+refine-stop 7000) 채움. 티저는 `render_teaser.py`로 30k 모델 fly-through GIF(키프레임 Slerp+Lerp 보간, 끝 floater 구간 트리밍, 1.95MB≤2MB, LFS 미사용 직접 커밋). 각주 링크는 outputs/ gitignore라 `07_evaluate.py` 참조로.
 - 확정된 환경/구현 사실: Ubuntu 24.04/WSL2, RTX 4070 Ti 12GB, torch 2.1.2/cu121
   - gsplat 1.5.3 (prereq: cuda-cccl=12.1.55, setuptools<70). **gsplat hold-out 학습은 `--refine-stop 7000` + means grad clip(max_norm 10) 필수** — 없으면 step ~9000 발산(densification 폭주).
   - WSLg에서 ORB-SLAM3 뷰어 항상 크래시 → headless 고정, 판정은 출력 파일 기준 (CLAUDE.md §4)
