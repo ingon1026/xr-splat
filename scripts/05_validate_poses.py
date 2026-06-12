@@ -73,6 +73,10 @@ def main():
     ap.add_argument("--crop", type=float, default=0.6, help="중앙 크롭 비율(1차 판정)")
     ap.add_argument("--pass-cm", type=float, default=3.0, help="PASS 임계 (percentile 거리)")
     ap.add_argument("--pairs", type=int, default=3, help="검증할 페어 수")
+    ap.add_argument("--ts-min", type=float, default=float("-inf"),
+                    help="이 타임스탬프 미만 키프레임 제외 (동적 구간 배제용)")
+    ap.add_argument("--ts-max", type=float, default=float("inf"),
+                    help="이 타임스탬프 초과 키프레임 제외 (동적 구간 배제용)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -90,6 +94,8 @@ def main():
     kf_path = args.root / "outputs" / args.scene / "slam" / "KeyFrameTrajectory.txt"
     recs = []
     for ts, tx, ty, tz, qx, qy, qz, qw in sorted(load_tum(kf_path), key=lambda k: k[0]):
+        if ts < args.ts_min or ts > args.ts_max:   # 동적(사람) 구간 키프레임 배제
+            continue
         rel = match_nearest(ts, rgb, ts_keys, args.tol)
         if rel is None:
             continue
