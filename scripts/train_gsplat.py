@@ -108,29 +108,39 @@ def main():
     ap.add_argument("--depth-lambda", type=float, default=0.2)
     ap.add_argument("--ssim-lambda", type=float, default=0.2)
     ap.add_argument("--sh-degree", type=int, default=3)
+    ap.add_argument("--holdout-every", type=int, default=0, help="매 N번째 뷰를 학습에서 제외(평가용). 0=없음")
+    ap.add_argument("--tag", default="", help="출력 서브디렉토리 접미사 (예: m1)")
+    ap.add_argument("--refine-stop", type=int, default=15000, help="densification 중단 step (hold-out 발산 방지로 낮춤)")
     args = ap.parse_args()
     device = "cuda"
     proc = args.root / "data" / "processed" / args.scene
-    out = args.root / "outputs" / args.scene / "gsplat"
+    out = args.root / "outputs" / args.scene / ("gsplat" + (f"_{args.tag}" if args.tag else ""))
     (out / "renders").mkdir(parents=True, exist_ok=True)
 
     views, K, W, H = load_views(proc, device)
+    views.sort(key=lambda v: v["name"])
+    if args.holdout_every > 0:
+        holdout = views[:: args.holdout_every]                                  # 매 N번째 = 평가용
+        train_views = [v for i, v in enumerate(views) if i % args.holdout_every != 0]
+        (out / "holdout.txt").write_text("\n".join(v["name"] for v in holdout) + "\n")
+    else:
+        holdout, train_views = [], views
     params, scene_scale = init_gaussians(proc, device, args.sh_degree)
-    print(f"[train] views={len(views)} {W}x{H} init_gaussians={params['means'].shape[0]} scene_scale={scene_scale:.2f}")
+    print(f"[train] train={len(train_views)} holdout={len(holdout)} {W}x{H} init={params['means'].shape[0]} scale={scene_scale:.2f}")
 
     lrs = dict(means=1.6e-4 * scene_scale, scales=5e-3, quats=1e-3, opacities=5e-2, sh0=2.5e-3, shN=2.5e-3 / 20)
     optimizers = {k: torch.optim.Adam([params[k]], lr=lrs[k], eps=1e-15) for k in params}  # 포즈 텐서 없음
     print(f"[train] optimizer param groups (포즈 고정 증거): {sorted(optimizers.keys())}")
 
-    strategy = DefaultStrategy(verbose=False)
+    strategy = DefaultStrategy(verbose=False, refine_stop_iter=args.refine_stop)
     strategy.check_sanity(params, optimizers)
     state = strategy.initialize_state(scene_scale=scene_scale)
 
     log = open(out / "train_log.jsonl", "w")
     rng = np.random.default_rng(0)
-    order = rng.permutation(len(views)).tolist()
+    order = rng.permutation(len(train_views)).tolist()
     for step in range(args.iters):
-        v = views[order[step % len(views)]]
+        v = train_views[order[step % len(train_views)]]
         colors = torch.cat([params["sh0"], params["shN"]], dim=1)
         sh_deg = min(args.sh_degree, step // (args.iters // (args.sh_degree + 1) + 1))
         render, alphas, info = rasterization(
@@ -148,6 +158,7 @@ def main():
         depth_l = F.l1_loss(depth_pred[dmask], v["depth"][dmask]) if dmask.any() else torch.zeros((), device=device)
         loss = (1 - args.ssim_lambda) * l1 + args.ssim_lambda * ssim_l + args.depth_lambda * depth_l
         loss.backward()
+        torch.nn.utils.clip_grad_norm_([params["means"]], max_norm=10.0)  # 위치 overshoot 방지(hold-out 무감독 영역 drift)
         for o in optimizers.values():
             o.step(); o.zero_grad(set_to_none=True)
         strategy.step_post_backward(params, optimizers, state, step, info, packed=False)
