@@ -57,10 +57,11 @@
 - 확정된 환경/구현 사실: Ubuntu 24.04/WSL2, RTX 4070 Ti 12GB, torch 2.1.2/cu121
   - gsplat 1.5.3 (prereq: cuda-cccl=12.1.55, setuptools<70). **gsplat hold-out 학습은 `--refine-stop 7000` + means grad clip(max_norm 10) 필수** — 없으면 step ~9000 발산(densification 폭주).
   - WSLg에서 ORB-SLAM3 뷰어 항상 크래시 → headless 고정, 판정은 출력 파일 기준 (CLAUDE.md §4)
-  - RealSense 라이브 스트리밍 WSL2 비신뢰 → Windows RealSense Viewer로 .bag 녹화 (Plan A)
+  - RealSense 라이브 스트리밍 WSL2 비신뢰 → Windows RealSense Viewer로 .bag 녹화 (Plan A). `docs/capture-guide.md`에 녹화 설정·동선 정리.
+  - **01 bag 모드는 Phase 1에서 librealsense 테스트 bag으로 실행 검증됨**(SDK brown_conrady coeffs 확인). Viewer Record와 추출기는 동일 SDK rosbag 스키마라 토픽/메타데이터 일치. **미검증 경로 = Viewer 녹화본 + 해상도 불일치 align**(테스트 bag은 동일 해상도였을 수 있음). 방어 보강: 모션(IMU) 프레임은 종료 대신 스킵, 미지원 color 포맷은 명시적 에러. align 타깃·저장 intrinsics 모두 color 스트림 기준(01_extract_bag.py:112,115).
   - COLMAP 베이스라인: `run_colmap_sfm.sh`(고정 TUM intrinsics, 127/127 등록) + `setup_sfm_baseline.py`(metric 스케일정렬 **s=0.234**, IQR/median 0.03)
   - 08 후처리: opacity prune→SH 3→1→경량, **421MB→105MB(-0.48dB)**
-- 다음: **M3** (README Results 표를 `outputs/tum_fr1_desk/eval_m1.json`으로 채우기 + 티저 GIF/이미지). **M2**는 내 D455 .bag 캡처 대기.
+- 다음: **M2** (D455 자체 캡처 E2E) — 내 .bag 캡처 대기. 도착 시 `01_extract_bag.py bag`로 추출(프레임수·intrinsics·매칭률 확인) → 02~08.
 - 미해결: **ORB 경로만 hold-out 발산**(COLMAP은 동일설정에서 안정) — 안전장치로 회피했으나 근본원인 미규명, M2 재발 시 조사.
 - GitHub: ingon1026/xr-splat (private). 푸시 전 히스토리 대용량 파일 검사 필수 (특히 ORBvoc).
 

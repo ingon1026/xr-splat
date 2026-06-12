@@ -125,19 +125,23 @@ def extract_bag(bag_path: Path, out: Path, depth_map_factor: float, max_frames: 
         ok, frames = pipe.try_wait_for_frames(2000)
         if not ok:
             break
-        fn = frames.get_frame_number()
-        if fn <= last_fn:  # 재생 루프/되감김 감지 → 종료
-            break
-        last_fn = fn
         frames = align.process(frames)
         d, c = frames.get_depth_frame(), frames.get_color_frame()
         if not d or not c:
-            log.warning("프레임 %d: depth/color 누락 → skip", fn)
-            continue
+            continue  # depth/color 없는 프레임셋(IMU 등 모션 전용) → 종료 말고 스킵
+        fn = frames.get_frame_number()
+        if fn <= last_fn:  # video 프레임 기준 재생 루프/되감김 감지 → 종료 (모션 프레임엔 영향 없음)
+            break
+        last_fn = fn
         ts = c.get_timestamp() / 1000.0  # ms → s
-        color = np.asanyarray(c.get_data())
-        if c.get_profile().format() == rs.format.rgb8:   # cv2.imwrite는 BGR 기대 → RGB면 변환
-            color = cv2.cvtColor(color, cv2.COLOR_RGB2BGR)
+        fmt = c.get_profile().format()
+        if fmt == rs.format.rgb8:        # cv2.imwrite는 BGR 기대 → RGB면 변환
+            color = cv2.cvtColor(np.asanyarray(c.get_data()), cv2.COLOR_RGB2BGR)
+        elif fmt == rs.format.bgr8:      # 이미 BGR → 그대로
+            color = np.asanyarray(c.get_data())
+        else:                            # YUYV 등: 색 변환 미보장 → 명시적 실패(조용한 손상 방지)
+            log.error("미지원 color 포맷 %s — RGB8 또는 BGR8로 재녹화 필요", fmt)
+            sys.exit(1)
         depth_raw = np.asanyarray(d.get_data()).astype(np.float32)
         depth_mm = np.clip(depth_raw * depth_scale_m * depth_map_factor, 0, 65535).astype(np.uint16)
         rgb_rel, depth_rel = f"rgb/{ts:.6f}.png", f"depth/{ts:.6f}.png"

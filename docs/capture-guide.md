@@ -22,9 +22,9 @@ RealSense Viewer 좌측 패널에서 녹화 전 확인:
 
 1. **Depth + Color 둘 다 Enable** — 한쪽만 녹화하면 `get_depth_frame()/get_color_frame()`이
    null → 모든 프레임 skip → 매칭 0쌍으로 추출이 비정상 종료한다.
-2. **Motion Module(IMU accel/gyro) OFF** — 이 파이프라인은 RGB-D(관성 미사용)다. IMU를 켜면
-   200~400Hz 모션 프레임셋이 영상 프레임 사이에 끼어 프레임번호 단조성을 깨고 추출이 조기 종료될
-   수 있다. 켤 이유가 없으니 끈다.
+2. **Motion Module(IMU accel/gyro) OFF** — 이 파이프라인은 RGB-D(관성 미사용)다. 추출기는
+   모션 전용 프레임셋을 스킵하도록 방어돼 있지만, IMU는 쓰지 않으니 끄는 게 깔끔하다(불필요한
+   200~400Hz 스트림 + bag 용량 절약).
 3. **Color 포맷 = RGB8 또는 BGR8** — YUYV 등 다른 포맷은 추출기가 BGR 변환을 보장하지 않아
    색이 깨진다.
 4. **두 스트림 같은 FPS(30/30)** — SDK syncer가 시간 매칭 안 되는 프레임셋을 버린다. fps가
