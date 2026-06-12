@@ -139,10 +139,11 @@ xr-splat/
 │                              #   ORB-SLAM3 yaml의 DepthMapFactor와 일치시킬 것. 1000 권장)
 ├── rgb.txt / depth.txt        # "timestamp filename" 목록
 ├── associations.txt           # rgb-depth 타임스탬프 매칭 (TUM associate.py 로직 내장)
-└── intrinsics.json            # bag에서 읽은 fx fy cx cy, width height, depth_scale
+└── intrinsics.json            # fx fy cx cy, width height, depth_scale, distortion(k1 k2 p1 p2 k3)
 ```
 구현 요건:
 - rs.align으로 depth를 color 프레임에 정렬한 후 저장 (intrinsics는 color 스트림 것을 사용)
+- 왜곡계수(distortion: k1 k2 p1 p2 k3)도 intrinsics.json에 기록 — 원본 이미지 렌즈왜곡 보정(ORB-SLAM3 트래킹 정확도). D455 bag=SDK coeffs, TUM=공식계수, Replica=0
 - 프레임 드랍 대비: timestamp 기반 매칭, 매칭 실패 프레임은 버리고 카운트 로깅
 - intrinsics.json은 이후 모든 단계의 단일 진실 공급원(single source of truth)
 - **Acceptance**: 추출된 rgb/depth 한 쌍을 open3d로 역투영했을 때 장면 형태가 보인다.

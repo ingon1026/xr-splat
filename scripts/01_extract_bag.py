@@ -27,13 +27,18 @@ from pathlib import Path
 log = logging.getLogger("extract")
 
 # TUM freiburg 카메라 프리셋 (https://cvg.cit.tum.de/data/datasets/rgbd-dataset/file_formats)
+# distortion(k1 k2 p1 p2 k3) = ORB-SLAM3 번들 TUMx.yaml 공식 계수
 TUM_PRESETS = {
-    "fr1": dict(fx=517.306408, fy=516.469215, cx=318.643040, cy=255.313989, width=640, height=480),
-    "fr2": dict(fx=520.908620, fy=521.007327, cx=325.141442, cy=249.701764, width=640, height=480),
-    "fr3": dict(fx=535.4, fy=539.2, cx=320.1, cy=247.6, width=640, height=480),
+    "fr1": dict(fx=517.306408, fy=516.469215, cx=318.643040, cy=255.313989, width=640, height=480,
+                distortion=dict(model="radtan", k1=0.262383, k2=-0.953104, p1=-0.005358, p2=0.002628, k3=1.163314)),
+    "fr2": dict(fx=520.908620, fy=521.007327, cx=325.141442, cy=249.701764, width=640, height=480,
+                distortion=dict(model="radtan", k1=0.231222, k2=-0.784899, p1=-0.003257, p2=-0.000105, k3=0.917205)),
+    "fr3": dict(fx=535.4, fy=539.2, cx=320.1, cy=247.6, width=640, height=480,
+                distortion=dict(model="radtan", k1=0.0, k2=0.0, p1=0.0, p2=0.0, k3=0.0)),
 }
 TUM_DEPTH_SCALE = 5000.0
 REPLICA_DEPTH_SCALE = 6553.5  # cam_params.json 의 scale 가 있으면 그 값 우선
+ZERO_DIST = dict(model="none", k1=0.0, k2=0.0, p1=0.0, p2=0.0, k3=0.0)
 ASSOC_MAX_DIFF = 0.02  # rgb-depth 타임스탬프 매칭 허용오차 [s]
 
 
@@ -108,8 +113,10 @@ def extract_bag(bag_path: Path, out: Path, depth_map_factor: float, max_frames: 
 
     depth_scale_m = profile.get_device().first_depth_sensor().get_depth_scale()
     ci = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
+    cc = list(ci.coeffs)  # brown_conrady: [k1, k2, p1, p2, k3]
+    dist = dict(model=str(ci.model).rsplit(".", 1)[-1], k1=cc[0], k2=cc[1], p1=cc[2], p2=cc[3], k3=cc[4])
     intr = dict(fx=ci.fx, fy=ci.fy, cx=ci.ppx, cy=ci.ppy, width=ci.width, height=ci.height,
-                depth_scale=float(depth_map_factor), source=f"bag:{bag_path.name}")
+                depth_scale=float(depth_map_factor), distortion=dist, source=f"bag:{bag_path.name}")
     log.info("color intrinsics fx=%.2f fy=%.2f cx=%.2f cy=%.2f %dx%d | SDK depth_scale=%.6g m/unit",
              ci.fx, ci.fy, ci.ppx, ci.ppy, ci.width, ci.height, depth_scale_m)
 
@@ -187,7 +194,7 @@ def ingest_replica(src: Path, out: Path, cam_params: Path):
     intr = dict(fx=cam["fx"], fy=cam["fy"], cx=cam["cx"], cy=cam["cy"],
                 width=cam["w"], height=cam["h"],
                 depth_scale=float(cam.get("scale", REPLICA_DEPTH_SCALE)),
-                source=f"replica:{src.name}")
+                distortion=ZERO_DIST, source=f"replica:{src.name}")
     write_index_files(out, pairs, intr)
 
 
