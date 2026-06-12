@@ -18,7 +18,17 @@ def fnum(x):
 
 def make_yaml(intr: dict, atlas_name: str, nfeatures: int) -> str:
     d = intr.get("distortion", {})
-    k1, k2, p1, p2, k3 = (d.get(k, 0.0) for k in ("k1", "k2", "p1", "p2", "k3"))
+    model = str(d.get("model", "none")).lower()
+    # ORB-SLAM3 Camera1.k1..k3/p1/p2 는 forward Brown-Conrady(radtan) 계수를 기대한다.
+    # RealSense color 스트림은 왜곡을 'inverse_brown_conrady'(역방향 모델)로 보고하는데, 이 계수를
+    # radtan에 그대로 넣으면 매핑 방향이 어긋나 오히려 왜곡을 키운다. D455 color는 공장 정류로
+    # 계수가 ~0이라, 역모델일 때는 0으로 두는 것이 정확하고 안전하다(직매핑 부정확 + 계수 무시 가능).
+    # TUM 등 forward radtan/brown_conrady 계수는 그대로 사용. (SPEC §3 Phase 2)
+    if model in ("inverse_brown_conrady", "inverse_modified_brown_conrady"):
+        k1 = k2 = p1 = p2 = k3 = 0.0
+        print(f"[yaml] distortion model='{model}' (역모델) → radtan 계수 0 처리")
+    else:
+        k1, k2, p1, p2, k3 = (d.get(k, 0.0) for k in ("k1", "k2", "p1", "p2", "k3"))
     w, h = int(intr["width"]), int(intr["height"])
     lines = [
         "%YAML:1.0", "",

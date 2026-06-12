@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--n", type=int, default=30, help="사용할 키프레임 수")
     ap.add_argument("--voxel", type=float, default=0.02, help="voxel downsample [m]")
     ap.add_argument("--stride", type=int, default=4, help="픽셀 샘플 간격")
+    ap.add_argument("--max-depth", type=float, default=6.0,
+                    help="이 거리[m] 초과 depth는 무효화 — D455 신뢰범위 밖 원거리 스테레오 노이즈/uint16 포화 제거")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -53,6 +55,7 @@ def main():
         if not dpath.exists():
             log.warning("depth 없음: %s", name); continue
         depth = cv2.imread(str(dpath), cv2.IMREAD_UNCHANGED).astype(np.float32) / ds
+        depth[depth > args.max_depth] = 0.0   # 신뢰범위 밖 원거리(스테레오 노이즈/포화) 무효화
         rgb = cv2.imread(str(proc / "rgb" / name))
         R_wc, t_wc = colmap_world_RT(*imgs[name])
         w, _, c = backproject(depth, fx, fy, cx, cy, R_wc, t_wc, stride=args.stride, rgb=rgb)

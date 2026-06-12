@@ -151,6 +151,9 @@ xr-splat/
 ### Phase 2 — ORB-SLAM3 실행 (`02_run_orbslam3.sh` + yaml 자동 생성)
 - intrinsics.json에서 ORB-SLAM3 yaml(`d455_orbslam3.yaml`)을 자동 생성하는 헬퍼 포함
   (Camera.fx 등 + DepthMapFactor를 Phase 1의 depth 스케일과 반드시 일치)
+  - **distortion 모델 분기**: ORB-SLAM3 `Camera1.k1..k3/p1/p2`는 forward Brown-Conrady(radtan) 계수를 기대한다.
+    RealSense color 스트림은 `inverse_brown_conrady`(역모델)로 보고하므로 그 계수를 radtan에 직매핑하면 부정확하다.
+    D455 color는 공장 정류로 계수가 ~0이라, **역모델이면 계수 0 처리**(forward radtan/brown_conrady는 그대로 사용).
 - RGB-D 모드로 실행, 산출물 2개를 outputs/<scene>/slam/에 보관:
   1. `KeyFrameTrajectory.txt` (TUM 포맷: timestamp tx ty tz qx qy qz qw — **Twc, 즉 camera-to-world**)
   2. Atlas 맵 파일 (`System.SaveAtlasToFile` 설정 활성화) — 런타임 relocalization 자산
@@ -180,6 +183,8 @@ xr-splat/
 
 ### Phase 4 — 초기 포인트클라우드 (`04_make_pointcloud.py`) & 검증 (`05_validate_poses.py`)
 - N개(기본 30) 키프레임의 depth를 Tcw 포즈로 월드 좌표에 역투영, 색은 rgb에서 샘플
+  - **max-depth 클램프(기본 6m)**: D455 신뢰범위(~0.6~6m) 밖 원거리 depth는 스테레오 노이즈/uint16 포화(65.5m)라
+    역투영 시 떠도는 점이 되므로 무효화(0)한다. backproject가 depth>0만 사용. (실측 room1: max 65.5m outlier 관측)
 - voxel downsample (기본 2cm) 후 points3D.txt(또는 .ply)로 저장 → gsplat 초기화 입력
 - `05_validate_poses.py`: **공통 표면이 겹치는 시점 페어**를 골라 각각 역투영해 정합 검사.
   **판정 기준: 같은 벽/바닥이 한 겹이면 PASS, 두 겹 유령이면 FAIL.**
