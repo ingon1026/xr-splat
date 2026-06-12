@@ -206,9 +206,23 @@ xr-splat/
 
 ### Phase 6 — 평가 (`07_evaluate.py`) & 후처리 (`08_postprocess.py`)
 - 평가: 학습에서 제외한 hold-out 키프레임(매 8번째)에 대해 PSNR/SSIM/LPIPS 산출, JSON 저장
-- **베이스라인 비교 실험 (보고서용 핵심 근거)**: 동일 이미지로
-  (a) COLMAP SfM 포즈 학습 vs (b) ORB-SLAM3 포즈 학습 → 품질 차이 측정.
-  목표: 차이 0.5dB 이내면 파이프라인 타당성 입증
+- **베이스라인 비교 실험 (M1 핵심 근거)**: 동일 이미지로 (a) COLMAP SfM 포즈 vs (b) ORB-SLAM3 포즈 학습 → 품질 차이.
+  공정 비교를 위해 **포즈 소스만 다르고 나머지는 전부 동일**해야 한다:
+  - **스케일 처리**: COLMAP SfM는 스케일 임의(monocular). metric depth loss와 충돌하므로 **COLMAP 재구성을 metric으로
+    스케일 정렬**한 뒤 비교한다 — 정렬 계수 `s = median(metric_depth / COLMAP_sparse_depth)` (가시 sparse, **유효 depth 픽셀만**).
+    **비율 분포가 tight한지 확인·스프레드 리포트** — bimodal/wide면 스케일 드리프트·매칭 불량(blind median 금지). s를
+    포즈 translation·포인트에 적용. 그 후 **양쪽 동일 프로토콜**(metric 포즈 → 04 dense-depth init → 06 depth ON).
+    (양쪽 depth-off는 스케일 회피엔 간단하나 depth-supervised 파이프라인 자체를 검증 못 하므로 비채택.)
+  - **hold-out 분할**: 매 8번째 키프레임을 평가용 제외, **양쪽 동일 인덱스**. hold-out은 **양쪽 모두 포즈가 있는
+    공통(교집합) 프레임**에서만 — 한쪽만 등록된 프레임으로 평가하면 비교가 오염됨. **register-all-then-split**: COLMAP
+    SfM·SLAM은 hold-out 프레임의 포즈도 산출해야 한다(렌더해 채점) — 학습에서만 제외, 포즈 추정에선 제외하지 않음.
+  - **등록 실패 프레임**: COLMAP SfM 미등록·ORB 미추적 프레임은 비교 평가에서 **양쪽 모두 제외**(교집합 평가),
+    제외 개수와 등록률(ORB vs COLMAP)을 리포트 — 등록률 자체가 견고성 근거.
+  - **동일 프로토콜**: 동일 hold-out·동일 학습 config/iter/해상도·동일 평가(렌더 후 PSNR/SSIM/LPIPS).
+  - **M1 판정**: 절대 PSNR이 아니라 **차이 |PSNR_ORB − PSNR_COLMAP| ≤ 0.5dB**, **per-view 분포로 리포트**(mean-of-means
+    금지 — 한 경로가 특정 뷰에서만 망가지는 걸 평균이 숨김). PSNR-Δ는 간접 proxy라 단독으론 약한 baseline과의 일치도
+    통과시킴 → **ATE-vs-GT 필수**: TUM `groundtruth.txt`로 양쪽 포즈의 절대 정확도(ATE)를 측정·리포트해 **COLMAP이
+    신뢰할 gold standard임을 먼저 입증**. M1 PASS는 PSNR-Δ와 ATE 둘 다로 해석한다.
 - 공개 데이터셋 선행 검증: 자체 캡처 전에 TUM RGB-D 또는 Replica 시퀀스로 전체 파이프라인
   1회 통과 (GT 궤적과 ATE 비교 가능)
 - 후처리: opacity 기반 pruning → SH degree 3→1 축소 옵션 → 압축 export.
@@ -290,7 +304,7 @@ wandb/
 | # | 작업 | 완료 판정 |
 |---|---|---|
 | M0 | 스캐폴딩 + ORB-SLAM3 빌드 | TUM 공개 시퀀스 예제 구동 |
-| M1 | 공개 데이터셋 E2E | TUM/Replica 1개 시퀀스가 01→07 전체 통과, COLMAP 대비 PSNR 차 ≤ 0.5dB |
+| M1 | 공개 데이터셋 E2E | TUM/Replica 1개 시퀀스가 01→07 전체 통과, **공통 hold-out·동일 프로토콜**에서 COLMAP 대비 **PSNR 차 \|ORB−COLMAP\| ≤ 0.5dB**(절대값 아님) **+ 양쪽 ATE-vs-GT 리포트**(COLMAP이 신뢰할 baseline인지) |
 | M2 | D455 자체 캡처 E2E | 자체 촬영 방 1개의 scene.ply 생성, 05 검증 PASS |
 | M3 | 후처리 + 결과 정리 | 경량화 표 + README Results 섹션 완성 |
 | M4 | 공개 | 5.6 체크리스트 전부 통과 후 public 전환 |
