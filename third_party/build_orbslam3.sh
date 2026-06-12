@@ -6,18 +6,11 @@ set -eo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SUB="$HERE/ORB_SLAM3"
 
-# 1) third_party/patches/*.patch 적용 (이미 적용돼 있으면 건너뜀)
-cd "$SUB"
-for p in "$HERE"/patches/*.patch; do
-  [ -e "$p" ] || continue
-  if git apply --check "$p" 2>/dev/null; then
-    git apply "$p" && echo "[patch] applied $(basename "$p")"
-  else
-    echo "[patch] skip (already applied or N/A): $(basename "$p")"
-  fi
-done
+# 1) 패치 적용 (번호 순서 idempotent)
+bash "$HERE/patches/apply.sh"
 
 # 2) 빌드 (gcc-11)
+cd "$SUB"
 if [ -x /usr/bin/gcc-11 ]; then export CC=/usr/bin/gcc-11 CXX=/usr/bin/g++-11; fi
 echo "[build] CC=${CC:-default}"
 chmod +x build.sh
