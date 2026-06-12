@@ -61,7 +61,13 @@
   - **01 bag 모드는 Phase 1에서 librealsense 테스트 bag으로 실행 검증됨**(SDK brown_conrady coeffs 확인). Viewer Record와 추출기는 동일 SDK rosbag 스키마라 토픽/메타데이터 일치. **미검증 경로 = Viewer 녹화본 + 해상도 불일치 align**(테스트 bag은 동일 해상도였을 수 있음). 방어 보강: 모션(IMU) 프레임은 종료 대신 스킵, 미지원 color 포맷은 명시적 에러. align 타깃·저장 intrinsics 모두 color 스트림 기준(01_extract_bag.py:112,115).
   - COLMAP 베이스라인: `run_colmap_sfm.sh`(고정 TUM intrinsics, 127/127 등록) + `setup_sfm_baseline.py`(metric 스케일정렬 **s=0.234**, IQR/median 0.03)
   - 08 후처리: opacity prune→SH 3→1→경량, **421MB→105MB(-0.48dB)**
-- 다음: **M2** (D455 자체 캡처 E2E) — 내 .bag 캡처 대기. 도착 시 `01_extract_bag.py bag`로 추출(프레임수·intrinsics·매칭률 확인) → 02~08.
+- **M2 1차(room1) — 파이프라인 검증 통과, 품질은 궤적 협소로 한계. 재캡처 1회 예정.**
+  - E2E 완주: 추출(2175프레임, 1280×720, align 848→1280 ✓) → 02 ORB(트래킹 로스 1회 **→ 맵 병합 복구**, 303 KF) →
+    03 → 05 PASS(룸스케일 baseline 0.1~0.28, seam 가로지르기 검사 ~1cm 용접) → 04/06 **사람 170 KF 제외**(`--exclude-list`, (c) 전략) →
+    30k 발산 없이 완주(refine-stop 7000+grad clip; **N 722k 동결, M1 발산 재발 안 함** — 제외 56%에도).
+  - 품질: 정적뷰 PSNR **full 21.6 / lite 21.4**(−0.22dB, 722k→338k, 179→35MB). **흐림** — 원인은 파이프라인 아닌 **캡처**(총 이동 1.09m·범위 0.285m 제자리 회전, D455 depth 노이즈, 모션블러).
+  - ⚠ **08 ref-view 함정**: 08은 첫 KF를 ref로 쓰는데 그게 **제외된 사람 프레임**이면 PSNR가 가짜(9.47)로 찍힌다. 실측은 정적뷰로 별도 측정.
+- 다음: **M2 재캡처**(capture-guide 교훈 반영: 걸으며 궤적 3m+, 제자리회전 금지, 시작/끝 사람 프레임 인 금지). 도착 시 `01_extract_bag.py bag` → 02~08.
 - 미해결: **ORB 경로만 hold-out 발산**(COLMAP은 동일설정에서 안정) — 안전장치로 회피했으나 근본원인 미규명, M2 재발 시 조사.
 - GitHub: ingon1026/xr-splat (private). 푸시 전 히스토리 대용량 파일 검사 필수 (특히 ORBvoc).
 

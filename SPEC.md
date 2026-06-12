@@ -321,7 +321,7 @@ wandb/
 |---|---|---|
 | M0 | 스캐폴딩 + ORB-SLAM3 빌드 | TUM 공개 시퀀스 예제 구동 |
 | M1 | 공개 데이터셋 E2E | TUM/Replica 1개 시퀀스가 01→07 전체 통과, **공통 hold-out·동일 프로토콜**에서 COLMAP 대비 **PSNR 차 \|ORB−COLMAP\| ≤ 0.5dB**(절대값 아님) **+ 양쪽 ATE-vs-GT 리포트**(COLMAP이 신뢰할 baseline인지) |
-| M2 | D455 자체 캡처 E2E | 자체 촬영 방 1개의 scene.ply 생성, 05 검증 PASS |
+| M2 | D455 자체 캡처 E2E | 자체 촬영 방 1개의 scene.ply 생성, 05 검증 PASS. **1차(room1): 파이프라인 검증 통과**(05 PASS·발산 없이 scene.ply 생성, 동적 사람 KF는 `--exclude-list`로 04/06 제외) — **단 품질은 궤적 협소(총 이동 1.09m)로 한계(정적뷰 PSNR ~21.6, 흐림). 재캡처 1회 예정**(궤적 3m+, 제자리회전 금지). |
 | M3 | 후처리 + 결과 정리 | 경량화 표 + README Results 섹션 완성 |
 | M4 | 공개 | 5.6 체크리스트 전부 통과 후 public 전환 |
 
