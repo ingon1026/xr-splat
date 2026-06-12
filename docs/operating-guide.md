@@ -51,12 +51,16 @@
 
 ## 4. 진행 현황 스냅샷 (2026-06-12 기준)
 
-- 완료: Phase 0 (스캐폴딩, ORB-SLAM3 빌드+패치, M0 통과), Phase 1 (01_extract_bag.py, 3개 입력 모드 검증), Phase 2 (02_run_orbslam3.sh headless, fr1/desk 127 KF + Atlas .osa), Phase 3 (03_tum_to_colmap.py + pipeline/colmap_convert.py, 단위테스트 5 + 적대적 리뷰 통과)
-- 확정된 환경 사실: Ubuntu 24.04/WSL2, RTX 4070 Ti 12GB, torch 2.1.2/cu121
-  - gsplat 1.5.3 호환 확정 (prereq: cuda-cccl=12.1.55, setuptools<70 — environment.yml에 기록됨)
-  - WSLg에서 ORB-SLAM3 뷰어 항상 크래시 → 전 단계 headless 고정, 판정은 출력 파일 기준 (CLAUDE.md §4)
-  - RealSense 라이브 스트리밍은 WSL2에서 비신뢰 → 캡처는 Windows RealSense Viewer로 .bag 녹화 (Plan A)
-- 다음: Phase 4 (04_make_pointcloud.py + 05_validate_poses.py "벽 한 겹" 게이트 — 05 PASS 전 gsplat 학습 금지). Phase 3 기하검증도 05에서 닫힘
+- 완료: **Phase 0~6 전부, M1 PASS** (공개 데이터셋 fr1/desk E2E). ORB vs COLMAP **PSNR Δ=0.13dB(≤0.5)**, **ATE ORB 1.9cm / COLMAP 2.0cm** → decoupled 파이프라인 타당성 입증.
+  - Phase 2 headless 127 KF+Atlas / Phase 3 단위+적대적리뷰 / Phase 4 05 게이트 PASS / Phase 5 gsplat(포즈고정+depth, 30k 23dB) / Phase 6 평가+후처리.
+- 확정된 환경/구현 사실: Ubuntu 24.04/WSL2, RTX 4070 Ti 12GB, torch 2.1.2/cu121
+  - gsplat 1.5.3 (prereq: cuda-cccl=12.1.55, setuptools<70). **gsplat hold-out 학습은 `--refine-stop 7000` + means grad clip(max_norm 10) 필수** — 없으면 step ~9000 발산(densification 폭주).
+  - WSLg에서 ORB-SLAM3 뷰어 항상 크래시 → headless 고정, 판정은 출력 파일 기준 (CLAUDE.md §4)
+  - RealSense 라이브 스트리밍 WSL2 비신뢰 → Windows RealSense Viewer로 .bag 녹화 (Plan A)
+  - COLMAP 베이스라인: `run_colmap_sfm.sh`(고정 TUM intrinsics, 127/127 등록) + `setup_sfm_baseline.py`(metric 스케일정렬 **s=0.234**, IQR/median 0.03)
+  - 08 후처리: opacity prune→SH 3→1→경량, **421MB→105MB(-0.48dB)**
+- 다음: **M3** (README Results 표를 `outputs/tum_fr1_desk/eval_m1.json`으로 채우기 + 티저 GIF/이미지). **M2**는 내 D455 .bag 캡처 대기.
+- 미해결: **ORB 경로만 hold-out 발산**(COLMAP은 동일설정에서 안정) — 안전장치로 회피했으나 근본원인 미규명, M2 재발 시 조사.
 - GitHub: ingon1026/xr-splat (private). 푸시 전 히스토리 대용량 파일 검사 필수 (특히 ORBvoc).
 
 ## 5. 나중에 필요해질 지식 (대화에서 나온 결론 요약)

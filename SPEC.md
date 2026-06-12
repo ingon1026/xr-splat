@@ -219,6 +219,9 @@ xr-splat/
   - **등록 실패 프레임**: COLMAP SfM 미등록·ORB 미추적 프레임은 비교 평가에서 **양쪽 모두 제외**(교집합 평가),
     제외 개수와 등록률(ORB vs COLMAP)을 리포트 — 등록률 자체가 견고성 근거.
   - **동일 프로토콜**: 동일 hold-out·동일 학습 config/iter/해상도·동일 평가(렌더 후 PSNR/SSIM/LPIPS).
+  - **학습 프로토콜 (M1 실측값)**: 양쪽 **15k iter + `--refine-stop 7000`(densification 조기 중단) + means grad clip(max_norm 10)** + 공통 **hold-out 16뷰**.
+    ⚠ **hold-out 학습은 step ~9000에서 발산**한다(제외된 뷰 영역의 가우시안이 무감독 → drift → densification 폭주 7~10M). 위 안전장치 필수.
+    **발산 원인은 완전 규명이 아니라 안전장치로 회피**한 상태 — **ORB 경로만 발산**(COLMAP은 동일 설정에서 안정)했으므로, **M2(자체 캡처)에서 재발 시 근본원인 재조사**할 것.
   - **M1 판정**: 절대 PSNR이 아니라 **차이 |PSNR_ORB − PSNR_COLMAP| ≤ 0.5dB**, **per-view 분포로 리포트**(mean-of-means
     금지 — 한 경로가 특정 뷰에서만 망가지는 걸 평균이 숨김). PSNR-Δ는 간접 proxy라 단독으론 약한 baseline과의 일치도
     통과시킴 → **ATE-vs-GT 필수**: TUM `groundtruth.txt`로 양쪽 포즈의 절대 정확도(ATE)를 측정·리포트해 **COLMAP이
