@@ -4,6 +4,9 @@ data/processed/*
 outputs/*
 logs/
 
+# 자동생성 ORB-SLAM3 설정 (02_run_orbslam3.sh가 intrinsics.json에서 생성하는 파생물)
+configs/*_orbslam3.yaml
+
 # 대용량 바이너리·체크포인트
 *.bag
 *.ply
