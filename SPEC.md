@@ -181,9 +181,17 @@ xr-splat/
 ### Phase 4 — 초기 포인트클라우드 (`04_make_pointcloud.py`) & 검증 (`05_validate_poses.py`)
 - N개(기본 30) 키프레임의 depth를 Tcw 포즈로 월드 좌표에 역투영, 색은 rgb에서 샘플
 - voxel downsample (기본 2cm) 후 points3D.txt(또는 .ply)로 저장 → gsplat 초기화 입력
-- `05_validate_poses.py`: 서로 다른 시점의 키프레임 그룹 2개를 각각 역투영해 함께 시각화
-  (open3d). **판정 기준: 같은 벽/바닥이 한 겹으로 정합되면 PASS, 두 겹 유령이면 FAIL.**
-  추가 자동 판정: 두 그룹 간 최근접점 평균 거리 < 3cm이면 PASS로 간주하는 수치 지표 출력
+- `05_validate_poses.py`: **공통 표면이 겹치는 시점 페어**를 골라 각각 역투영해 정합 검사.
+  **판정 기준: 같은 벽/바닥이 한 겹이면 PASS, 두 겹 유령이면 FAIL.**
+  - 페어 선정·겹침 마스크는 **신뢰 Twc**(KeyFrameTrajectory)로 한다 — 검증 대상인 Tcw로 잡으면 진짜
+    ghost가 게이트 밖으로 빠져 false-PASS 됨. **정합 측정은 COLMAP Tcw 역투영**으로(gsplat이 쓰는 포즈).
+  - baseline은 **moderate(기본 0.2~0.6m)** — 너무 작으면 약한 게이트, 너무 크면 SLAM 드리프트가 임계를 잠식.
+  - 수치 판정: 겹침 영역 최근접거리의 **percentile(p50) < 3cm**(평균 아님 — 비겹침 점이 평균 오염).
+    **중앙 크롭(기본 0.6)이 1차 포즈 판정**(PINHOLE+렌즈왜곡이 full-frame을 지배), full-frame은 왜곡 진단.
+  - 페어를 못 찾으면 **cannot-validate**(절대 default-PASS 금지).
+  - 파라미터(baseline/percentile 임계/crop)는 **TUM 책상 스케일 기본값** — Replica/D455 룸스케일은 재검증 필요.
+  - 한계: NN거리는 in-plane 평행이동에 둔감(gross 역변환은 평면 밖이라 잡힘). off-by-one 배선버그는
+    association(kf_ts==rgb_ts, ‖C−t_wc‖≈0)으로 별도 배제. negative control(포즈 섭동→FAIL)로 게이트 작동 확인.
 - **Acceptance**: 05 스크립트 PASS. 이 검증 전에는 절대 Phase 5로 진행하지 말 것.
 
 ### Phase 5 — gsplat 학습 (`06_train_gsplat.sh`)
