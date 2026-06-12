@@ -195,6 +195,10 @@ xr-splat/
     **중앙 크롭(기본 0.6)이 1차 포즈 판정**(PINHOLE+렌즈왜곡이 full-frame을 지배), full-frame은 왜곡 진단.
   - 페어를 못 찾으면 **cannot-validate**(절대 default-PASS 금지).
   - 파라미터(baseline/percentile 임계/crop)는 **TUM 책상 스케일 기본값** — Replica/D455 룸스케일은 재검증 필요.
+    - **룸스케일 knobs 원칙**: **baseline·overlap-min은 궤적 스케일에 맞춰 조정 가능**(근접/소이동 스캔은 baseline 하한↓·overlap↓해
+      co-visible 페어를 확보). 단 **판정 임계 `pass-cm`(=3cm)은 고정** — 게이트 강도 자체는 절대 약화하지 않는다(페어 *선정* 범위만 조정).
+      실측 D455 room1(총 이동 1.09m, 중앙 depth 0.64m): `--baseline 0.1 0.28 --overlap-min 0.15`에서 PASS(center p50 0.9~2.3cm).
+      seam(트래킹 로스→맵 병합) 구간은 **seam을 가로지르는 페어**로 별도 검사할 것(강체 offset은 baseline과 무관하게 p50에 드러남).
   - 한계: NN거리는 in-plane 평행이동에 둔감(gross 역변환은 평면 밖이라 잡힘). off-by-one 배선버그는
     association(kf_ts==rgb_ts, ‖C−t_wc‖≈0)으로 별도 배제. negative control(포즈 섭동→FAIL)로 게이트 작동 확인.
 - **Acceptance**: 05 스크립트 PASS. 이 검증 전에는 절대 Phase 5로 진행하지 말 것.
@@ -206,8 +210,12 @@ xr-splat/
   - 카메라 포즈 최적화 OFF (포즈 고정) — splatfacto의 경우 camera-opt 비활성 플래그 확인
   - depth supervision ON — Phase 1의 depth를 데이터셋에 포함시켜 depth loss 활성화
   - iteration 30k 기본 (오프라인이므로 품질 우선)
+- **동적/제외 프레임**: `--exclude-list`로 사람 등 동적 구간 KF를 04 init·06 학습 양쪽에서 제외(유령 방지).
 - 산출물: `outputs/<scene>/gsplat/scene.ply` + 학습 로그 + 렌더링 샘플 이미지
-- **Acceptance**: 학습 완료 후 테스트 뷰 렌더링이 입력 사진과 시각적으로 일치
+- **Acceptance**: 학습 완료 후 테스트 뷰 렌더링이 입력 사진과 시각적으로 일치.
+  - **발산 감시(필수)**: train_log.jsonl의 **step 8000~12000**에서 `depth_l1`·`n_gauss` 안정 확인
+    (M1 발산: refine-stop 없으면 step~9000에 depth_l1 급등 + gaussians 폭주). **제외 비율이 높을수록**
+    (무감독 영역↑) 더 위험. **발산 시 회피(파라미터 조정) 금지 — 근본 원인 조사를 연다.**
 
 ### Phase 6 — 평가 (`07_evaluate.py`) & 후처리 (`08_postprocess.py`)
 - 평가: 학습에서 제외한 hold-out 키프레임(매 8번째)에 대해 PSNR/SSIM/LPIPS 산출, JSON 저장

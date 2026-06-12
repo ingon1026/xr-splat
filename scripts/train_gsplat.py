@@ -111,6 +111,7 @@ def main():
     ap.add_argument("--holdout-every", type=int, default=0, help="매 N번째 뷰를 학습에서 제외(평가용). 0=없음")
     ap.add_argument("--tag", default="", help="출력 서브디렉토리 접미사 (예: m1)")
     ap.add_argument("--refine-stop", type=int, default=15000, help="densification 중단 step (hold-out 발산 방지로 낮춤)")
+    ap.add_argument("--exclude-list", type=Path, help="학습/holdout에서 제외할 이미지명 목록(동적/사람 구간 KF)")
     args = ap.parse_args()
     device = "cuda"
     proc = args.root / "data" / "processed" / args.scene
@@ -119,6 +120,11 @@ def main():
 
     views, K, W, H = load_views(proc, device)
     views.sort(key=lambda v: v["name"])
+    if args.exclude_list:
+        excl = {l.strip() for l in open(args.exclude_list) if l.strip()}
+        n0 = len(views)
+        views = [v for v in views if v["name"] not in excl]
+        print(f"[train] exclude-list 적용: {n0}→{len(views)} views (제외 {n0 - len(views)})")
     if args.holdout_every > 0:
         holdout = views[:: args.holdout_every]                                  # 매 N번째 = 평가용
         train_views = [v for i, v in enumerate(views) if i % args.holdout_every != 0]

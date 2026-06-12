@@ -30,6 +30,8 @@ def main():
     ap.add_argument("--stride", type=int, default=4, help="픽셀 샘플 간격")
     ap.add_argument("--max-depth", type=float, default=6.0,
                     help="이 거리[m] 초과 depth는 무효화 — D455 신뢰범위 밖 원거리 스테레오 노이즈/uint16 포화 제거")
+    ap.add_argument("--exclude-list", type=Path,
+                    help="제외할 이미지명 목록 파일(동적/사람 구간 KF). init에 구워지면 안 되는 프레임 배제")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -44,10 +46,12 @@ def main():
         if len(p) >= 4:
             assoc[Path(p[1]).name] = p[3]
 
-    names = sorted(imgs.keys())
+    excl = {l.strip() for l in open(args.exclude_list) if l.strip()} if args.exclude_list else set()
+    names = [n for n in sorted(imgs.keys()) if n not in excl]
     step = max(1, len(names) // args.n)
     sel = names[::step][:args.n]
-    log.info("키프레임 %d/%d 선택 (stride=%d, voxel=%.3f)", len(sel), len(names), args.stride, args.voxel)
+    log.info("키프레임 %d/%d 선택 (제외 %d, stride=%d, voxel=%.3f)",
+             len(sel), len(names), len(excl), args.stride, args.voxel)
 
     worlds, colors = [], []
     for name in sel:
