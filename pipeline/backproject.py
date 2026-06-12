@@ -18,6 +18,30 @@ def read_colmap_images(path):
     return out
 
 
+def read_colmap_cameras(path):
+    """cameras.txt → (W, H, fx, fy, cx, cy). 단일 PINHOLE 카메라 가정."""
+    for l in open(path):
+        if l.startswith("#"):
+            continue
+        s = l.split()
+        if len(s) >= 8 and s[1] == "PINHOLE":   # CAMERA_ID PINHOLE W H fx fy cx cy
+            return int(s[2]), int(s[3]), float(s[4]), float(s[5]), float(s[6]), float(s[7])
+    raise ValueError(f"PINHOLE 카메라 없음: {path}")
+
+
+def read_points3d(path):
+    """points3D.txt → (xyz [N,3] float, rgb [N,3] uint8)."""
+    xyz, rgb = [], []
+    for l in open(path):
+        if l.startswith("#"):
+            continue
+        s = l.split()
+        if len(s) >= 7:    # POINT3D_ID X Y Z R G B ...
+            xyz.append([float(s[1]), float(s[2]), float(s[3])])
+            rgb.append([int(s[4]), int(s[5]), int(s[6])])
+    return np.array(xyz, dtype=np.float32), np.array(rgb, dtype=np.uint8)
+
+
 def tum_world_RT(tx, ty, tz, qx, qy, qz, qw):
     """Twc → (R_wc, t_wc)."""
     return Rot.from_quat([qx, qy, qz, qw]).as_matrix(), np.array([tx, ty, tz], float)

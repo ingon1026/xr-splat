@@ -116,6 +116,8 @@ python scripts/08_postprocess.py --scene room1
 
 Data and outputs are **not** stored in this repo — see [`data/README.md`](data/README.md) for how to obtain public datasets (TUM RGB-D, Replica) or capture your own.
 
+**Training framework (Phase 5):** gsplat (`rasterization` + `DefaultStrategy`) with a custom dense-depth loss. Chosen over nerfstudio splatfacto because neither ships turnkey dense per-pixel depth supervision for Gaussians (gsplat exposes depth rendering; splatfacto's depth loss is nerfacto-only), and gsplat is lighter, pre-verified on torch 2.1.2/cu121, and loads COLMAP directly. Camera poses stay **frozen** — no pose tensors in the optimizer (decoupled by design).
+
 ## Repository structure
 
 ```
