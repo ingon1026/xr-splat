@@ -66,6 +66,11 @@
     03 → 05 PASS(룸스케일 baseline 0.1~0.28, seam 가로지르기 검사 ~1cm 용접) → 04/06 **사람 170 KF 제외**(`--exclude-list`, (c) 전략) →
     30k 발산 없이 완주(refine-stop 7000+grad clip; **N 722k 동결, M1 발산 재발 안 함** — 제외 56%에도).
   - 품질: 정적뷰 PSNR **full 21.6 / lite 21.4**(−0.22dB, 722k→338k, 179→35MB). **흐림** — 원인은 파이프라인 아닌 **캡처**(총 이동 1.09m·범위 0.285m 제자리 회전, D455 depth 노이즈, 모션블러).
+  - **원인 확정 실험**: 정적 KF 시작/중간/끝 렌더 vs GT 비교 → **가장자리(start 18.2/end 19.1) ≫ 중앙(21.3) 블러 패턴**.
+    잘 덮인 중앙만 그나마 재구성, 가장자리는 본 시점 부족 → **시차/커버리지 결핍 확정**(모니터 발광/반사면이 최악). 파이프라인 무결.
+  - **room1 산출물 위치**(전부 outputs/=gitignore): `data/processed/d455_room1/`(추출 2175쌍+colmap),
+    `outputs/d455_room1/slam/{KeyFrameTrajectory.txt(303KF), d455_room1.osa}`,
+    `outputs/d455_room1/gsplat_exclude.txt`(사람 170KF), `outputs/d455_room1/gsplat/{scene.ply 722k/171MB, scene_lite.ply 338k/35MB(SuperSplat용)}`.
   - ⚠ **08 ref-view 함정**: 08은 첫 KF를 ref로 쓰는데 그게 **제외된 사람 프레임**이면 PSNR가 가짜(9.47)로 찍힌다. 실측은 정적뷰로 별도 측정.
 - 다음: **M2 재캡처**(capture-guide 교훈 반영: 걸으며 궤적 3m+, 제자리회전 금지, 시작/끝 사람 프레임 인 금지). 도착 시 `01_extract_bag.py bag` → 02~08.
 - 미해결: **ORB 경로만 hold-out 발산**(COLMAP은 동일설정에서 안정) — 안전장치로 회피했으나 근본원인 미규명, M2 재발 시 조사.
