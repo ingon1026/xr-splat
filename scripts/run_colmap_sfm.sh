@@ -26,9 +26,12 @@ echo "[sfm] 고정 intrinsics: $INTR"
   --ImageReader.camera_model PINHOLE --ImageReader.single_camera 1 \
   --ImageReader.camera_params "$INTR" \
   --FeatureExtraction.use_gpu 0
-"$COLMAP" exhaustive_matcher --database_path "$DB" --FeatureMatching.use_gpu 0
+# 비디오 시퀀스용 sequential matcher (exhaustive는 296장에 ~45분 → sequential ~5분)
+"$COLMAP" sequential_matcher --database_path "$DB" --FeatureMatching.use_gpu 0 --SequentialMatching.overlap 20
 "$COLMAP" mapper --database_path "$DB" --image_path "$RGB" --output_path "$OUT" \
   --Mapper.ba_refine_focal_length 0 --Mapper.ba_refine_principal_point 0 --Mapper.ba_refine_extra_params 0
+# setup_sfm_baseline.py 는 txt 입력을 읽으므로 bin → txt 변환
+"$COLMAP" model_converter --input_path "$OUT/0" --output_path "$OUT/0" --output_type TXT
 
 echo "[sfm] 등록 결과:"
 "$COLMAP" model_analyzer --path "$OUT/0" 2>&1 | grep -iE "Cameras|Images|Points" | head
