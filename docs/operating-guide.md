@@ -72,6 +72,13 @@
     `outputs/d455_room1/slam/{KeyFrameTrajectory.txt(303KF), d455_room1.osa}`,
     `outputs/d455_room1/gsplat_exclude.txt`(사람 170KF), `outputs/d455_room1/gsplat/{scene.ply 722k/171MB, scene_lite.ply 338k/35MB(SuperSplat용)}`.
   - ⚠ **08 ref-view 함정**: 08은 첫 KF를 ref로 쓰는데 그게 **제외된 사람 프레임**이면 PSNR가 가짜(9.47)로 찍힌다. 실측은 정적뷰로 별도 측정.
+- **조사 결과(2026-06-15) — 렌더 품질은 "포즈 품질"이 지배** (SPEC 변경 아님, 사실 기록):
+  - 통제 실험으로 확정: 트레이너 무죄(우리=RGB-only=원본 gsplat 동일), 캡처도 (생각보다) 무죄 → **범인은 ORB-SLAM3 포즈의 ~cm 광학 부정확**.
+    같은 데이터에 **포즈만 COLMAP SfM(0.69px)으로 교체 시 room1 21.6→27.0 / room2 20.5→25.8 (둘 다 +5dB)**. `pose-opt` 회복은 실패(lr 무효/발산).
+    → 이전 "M2 흐림=캡처 한계" 결론은 **부분 정정**: 캡처도 영향이나 **더 큰 병목은 ORB 포즈**였음(잘 덮인 영역은 COLMAP 포즈서 선명, 가장자리·모니터만 캡처 잔여).
+  - ⚠ 이건 **"해결"이 아니라 "우회"** — COLMAP은 임의 스케일·런타임 맵 없음, SPEC의 ORB 테제(좌표계 공유)와 모순. **main/SPEC 불변.**
+  - 코드·레시피·상세는 **브랜치 `experiment/colmap-poses`**(`docs/experiments/colmap-poses.md`). 우리 트레이너 약점도 기록: COLMAP sparse outlier가 `scene_scale` 부풀려 means LR 발산 → 점 필터 필요.
+  - **열린 문제(미해결)**: ORB 런타임 맵 ↔ COLMAP 렌더 품질 화해 = **Sim3 1회 정렬**(둘 다 같은 키프레임 포즈 보유). XR 런타임 단계서 결정.
 - 다음: **M2 재캡처**(capture-guide 교훈 반영: 걸으며 궤적 3m+, 제자리회전 금지, 시작/끝 사람 프레임 인 금지). 도착 시 `01_extract_bag.py bag` → 02~08.
 - 미해결: **ORB 경로만 hold-out 발산**(COLMAP은 동일설정에서 안정) — 안전장치로 회피했으나 근본원인 미규명, M2 재발 시 조사.
 - GitHub: ingon1026/xr-splat (private). 푸시 전 히스토리 대용량 파일 검사 필수 (특히 ORBvoc).
