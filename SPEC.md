@@ -243,6 +243,22 @@ xr-splat/
   1회 통과 (GT 궤적과 ATE 비교 가능)
 - 후처리: opacity 기반 pruning → SH degree 3→1 축소 옵션 → 압축 export.
   각 단계 전후의 (가우시안 수, 파일 크기, PSNR) 표 자동 출력
+- **좌표계 무결성 게이트 (sfmsnap 자산 채택 전 필수)**: sfmsnap(SfM 포즈를 ORB metric 프레임에 스냅) 자산은
+  **PSNR만으로 고르면 안 된다** — PSNR은 씬 자기 포즈로 렌더하므로 좌표계가 틀어져도 높게 나온다. 채택 전
+  **sfmsnap 포즈 vs ORB base 포즈의 Sim3 적합이 scale≈1.0 & rot≈0°**(이미 동일 프레임)인지 확인한다.
+  틀어지면(예: 공통 KF 부족으로 정합 실패) 런타임 ORB relocalization이 맵을 못 찾아 **decoupled가 무용**이 된다.
+  실측(2026-06-23): room2 sfmsnap = scale 1.0000/rot 0.00° PASS(자산 채택), home sfmsnap = PSNR 더 높지만
+  rot 75.78° FAIL(보류). 통과해도 남는 per-pose 보정량(room2=5.8cm)은 빌드/런타임 오프셋으로 리포트.
+- **깨진 프레임 수정 (`snap_scene_to_orb.py`)**: FAIL한 sfmsnap도 재캡처 없이 고친다 — ORB와 타임스탬프 매칭되는
+  공통 프레임으로 Sim3를 적합해 src 전체 포즈+포인트를 ORB 프레임에 강체 재정렬 후 재학습. 실측(2026-06-24 home):
+  76° 깨짐 → 수정 후 scale 1.0/rot 0°, **holdout PSNR 23.82**(깨진 sfmsnap 24.34 대비 −0.52dB) = 프레임 유효 M2 자산.
+- **05 게이트 scene-scale 보정 + 음성대조**: 대형 D455 scene(home median depth 2~3m)은 depth 노이즈 바닥(3~7cm)이
+  룸 책상 기본 `pass-cm 3.0` 위라 부적합 → `--baseline 0.15 0.4 --pass-cm 4.0`로 보정(PASS/FAIL이 depth와 상관함을
+  증명). **보정이 게이트를 약화 안 시켰음을 음성대조로 증명: images.txt(Tcw)를 회전3°+TZ10cm 섭동 → FAIL 해야 함**
+  (05는 in-plane translation·KeyFrameTrajectory 섭동엔 둔감하므로 그 둘로 음성대조하면 거짓 PASS — 틀린 음성대조).
+- **densification 폭주 주의**: snap/변형 씬은 default `refine-stop 15000`에서 가우시안 폭주 가능(home orbframe
+  step6700 5.7M, GPU OOM직전). 정상 plateau 기준(sfmsnap=2.0M 고정)과 비교 판단 — 폭주 시 `--refine-stop`을 입증
+  카운트(~2M)에 맞춰 조기 정지(M1도 hold-out 발산에 동일). 대형 공간은 GPU 메모리가 밀도를 제한해 small scene보다 soft.
 
 ---
 
