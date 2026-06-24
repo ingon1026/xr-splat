@@ -243,6 +243,12 @@ xr-splat/
   1회 통과 (GT 궤적과 ATE 비교 가능)
 - 후처리: opacity 기반 pruning → SH degree 3→1 축소 옵션 → 압축 export.
   각 단계 전후의 (가우시안 수, 파일 크기, PSNR) 표 자동 출력
+- **좌표계 무결성 게이트 (sfmsnap 자산 채택 전 필수)**: sfmsnap(SfM 포즈를 ORB metric 프레임에 스냅) 자산은
+  **PSNR만으로 고르면 안 된다** — PSNR은 씬 자기 포즈로 렌더하므로 좌표계가 틀어져도 높게 나온다. 채택 전
+  **sfmsnap 포즈 vs ORB base 포즈의 Sim3 적합이 scale≈1.0 & rot≈0°**(이미 동일 프레임)인지 확인한다.
+  틀어지면(예: 공통 KF 부족으로 정합 실패) 런타임 ORB relocalization이 맵을 못 찾아 **decoupled가 무용**이 된다.
+  실측(2026-06-23): room2 sfmsnap = scale 1.0000/rot 0.00° PASS(자산 채택), home sfmsnap = PSNR 더 높지만
+  rot 75.78° FAIL(보류). 통과해도 남는 per-pose 보정량(room2=5.8cm)은 빌드/런타임 오프셋으로 리포트.
 
 ---
 
