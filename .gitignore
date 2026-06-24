@@ -25,3 +25,4 @@ wandb/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !outputs/.gitkeep
+.understand-anything/
