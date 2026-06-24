@@ -59,123 +59,177 @@ git commit -m "feat(reloc): localization-mode settings yaml (LoadAtlasFromFile)"
 
 ---
 
-### Task 2: localization-mode RGB-D 러너 (C++)
+> **참고:** 원래 Task 2(C++ ORB localization 러너)·Task 3(ORB 실행)은 실제로 빌드·실행했으나 ORB-SLAM3 localization mode가 cold per-frame reloc에 부적합(atlas 서브맵 로드 시 639점만 활성 + RECENTLY_LOST 잠김 → 0% reloc)으로 **폐기**. Stage 1을 **COLMAP image_registrator 기반 per-frame localization**으로 교체(아래). 좌표가 orbframe(=가우시안 프레임)에 바로 떨어지고, 사용자가 고른 "프레임별 cold reloc" 의도에 부합. 폐기된 C++ 산출물(`rgbd_localization.cc`, CMake 타깃)은 남겨두되 미사용.
+
+### Task 2: COLMAP query localization 파이프라인
 
 **Files:**
-- Create: `third_party/ORB_SLAM3/Examples/RGB-D/rgbd_localization.cc`
-- Modify: `third_party/ORB_SLAM3/CMakeLists.txt` (새 실행 타깃 추가)
+- Create: `scripts/localize_query_colmap.sh`
 
 **Interfaces:**
-- Consumes: Task 1 yaml, home.osa, associations.txt.
-- Produces: 실행파일 `rgbd_localization`. 사용법 `./rgbd_localization <voc> <settings> <sequence_dir> <association> <out_reloc.txt>`. 출력 `out_reloc.txt` 각 줄 = `timestamp tx ty tz qx qy qz qw state` (state: 2=OK/tracked·reloc, 그 외=LOST). pose는 Twc(camera→world, world 좌표) TUM 규약.
+- Consumes: orbframe reference 모델(`data/processed/ros2_bag2_home_rgbd_orbframe/colmap/sparse/0/images.txt` = orbframe 좌표 known poses) + home rgb. `scripts/make_orb_seed_from_db.py` 재사용.
+- Produces: registered 모델 `outputs/ros2_bag2_home_rgbd/reloc_pnp/registered/`(TXT) — reference 224 KF + 등록된 query 프레임 포즈, 전부 orbframe 좌표. query 등록 성공 수.
 
-- [ ] **Step 1: rgbd_localization.cc 작성**
+**핵심 아이디어:** orbframe reference의 known poses를 **고정**해 point_triangulator로 descriptor 있는 모델을 orbframe 좌표에 만들고, query 프레임을 `image_registrator`로 그 모델에 등록 → query 포즈가 orbframe(=가우시안) 좌표로 나온다.
 
-`rgbd_tum.cc`를 기반으로, ① 생성자 직후 `SLAM.ActivateLocalizationMode()` 호출, ② 매 프레임 `TrackRGBD` 반환 pose와 `GetTrackingState()`를 out 파일에 직접 기록(SaveTrajectoryTUM은 LOST 프레임을 누락하므로 미사용). 핵심부:
-
-```cpp
-#include <fstream>
-#include <iomanip>
-#include <opencv2/core/core.hpp>
-#include "System.h"
-using namespace std;
-// LoadImages: rgbd_tum.cc와 동일 (associations 파싱) — 그대로 복사
-void LoadImages(const string&, vector<string>&, vector<string>&, vector<double>&);
-
-int main(int argc, char **argv){
-    if(argc != 6){ cerr << "Usage: ./rgbd_localization voc settings seq assoc out_reloc.txt\n"; return 1; }
-    vector<string> vRGB, vD; vector<double> vT;
-    LoadImages(string(argv[4]), vRGB, vD, vT);
-    int n = vRGB.size();
-    ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::RGBD, false); // headless
-    SLAM.ActivateLocalizationMode();                                          // 맵 고정, 새 KF 없음
-    ofstream f(argv[5]); f << fixed;
-    for(int ni=0; ni<n; ni++){
-        cv::Mat imRGB = cv::imread(string(argv[3])+"/"+vRGB[ni], cv::IMREAD_UNCHANGED);
-        cv::Mat imD   = cv::imread(string(argv[3])+"/"+vD[ni],   cv::IMREAD_UNCHANGED);
-        if(imRGB.empty()) continue;
-        double t = vT[ni];
-        Sophus::SE3f Tcw = SLAM.TrackRGBD(imRGB, imD, t);
-        int state = SLAM.GetTrackingState();                  // 2 = OK
-        Sophus::SE3f Twc = Tcw.inverse();
-        Eigen::Vector3f tw = Twc.translation();
-        Eigen::Quaternionf q = Twc.unit_quaternion();
-        f << setprecision(6) << t << " " << setprecision(7)
-          << tw.x()<<" "<<tw.y()<<" "<<tw.z()<<" "
-          << q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<" " << state << "\n";
-    }
-    f.close();
-    SLAM.Shutdown();
-    return 0;
-}
-```
-
-(`LoadImages` 함수 본문은 `rgbd_tum.cc`의 것을 그대로 복사해 파일 하단에 둔다 — 엔지니어가 다른 태스크를 안 봐도 되게.)
-
-- [ ] **Step 2: CMakeLists에 타깃 추가**
-
-`third_party/ORB_SLAM3/CMakeLists.txt`에서 기존 `rgbd_tum` 타깃 정의를 찾아(`grep -n rgbd_tum CMakeLists.txt`) 그 바로 아래에 동일 패턴으로 추가:
-
-```cmake
-add_executable(rgbd_localization Examples/RGB-D/rgbd_localization.cc)
-target_link_libraries(rgbd_localization ${PROJECT_NAME})
-```
-
-- [ ] **Step 3: 빌드 (백그라운드)**
+- [ ] **Step 1: localize_query_colmap.sh 작성**
 
 ```bash
-cd third_party/ORB_SLAM3/build
-nohup bash -c 'cmake --build . --target rgbd_localization -j4' > /tmp/build_reloc.log 2>&1 < /dev/null &
+#!/usr/bin/env bash
+# localize_query_colmap.sh — query 프레임을 orbframe 모델에 PnP 등록(=per-frame reloc, orbframe 좌표).
+#   usage: localize_query_colmap.sh [n_query] [stride]
+set -eo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+COLMAP=/home/ingon/miniconda3/envs/colmap/bin/colmap
+export LD_LIBRARY_PATH=/home/ingon/miniconda3/envs/colmap/lib
+P=/home/ingon/miniconda3/envs/xrsplat/bin/python
+NQ="${1:-80}"; STRIDE="${2:-4}"
+REF="$ROOT/data/processed/ros2_bag2_home_rgbd_orbframe/colmap/sparse/0"
+RGB="$ROOT/data/processed/ros2_bag2_home_rgbd/rgb"
+OUT="$ROOT/outputs/ros2_bag2_home_rgbd/reloc_pnp"; mkdir -p "$OUT"; DB="$OUT/database.db"; rm -f "$DB"
+INTR="642.284,641.448,641.204,366.335"   # fx,fy,cx,cy (orbframe intrinsics)
+
+# reference 224 KF 이름
+grep -v '^#' "$REF/images.txt" | awk 'NF>=10 && NR%2==1{print $10}' | sort > "$OUT/ref_names.txt"
+# query = reference 아닌 home rgb 프레임에서 STRIDE 간격으로 NQ개(시간순)
+ls "$RGB" | sort -t. -k1 -n | grep -vxFf "$OUT/ref_names.txt" | awk "NR%$STRIDE==1" | head -n "$NQ" > "$OUT/query_names.txt"
+cat "$OUT/ref_names.txt" "$OUT/query_names.txt" | sort -u > "$OUT/all_names.txt"
+echo "[loc] ref $(wc -l < "$OUT/ref_names.txt")  query $(wc -l < "$OUT/query_names.txt")"
+
+# 1) 특징 추출(ref+query) + exhaustive 매칭
+"$COLMAP" feature_extractor --database_path "$DB" --image_path "$RGB" \
+  --image_list_path "$OUT/all_names.txt" \
+  --ImageReader.camera_model PINHOLE --ImageReader.single_camera 1 \
+  --ImageReader.camera_params "$INTR" --FeatureExtraction.use_gpu 0
+"$COLMAP" exhaustive_matcher --database_path "$DB" --FeatureMatching.use_gpu 0
+
+# 2) reference 포즈 고정 시드(orbframe 좌표) → point_triangulator로 descriptor 모델
+$P "$ROOT/scripts/make_orb_seed_from_db.py" --db "$DB" --orb "$REF" --out "$OUT/seed"
+mkdir -p "$OUT/tri" "$OUT/registered"
+"$COLMAP" point_triangulator --database_path "$DB" --image_path "$RGB" \
+  --input_path "$OUT/seed" --output_path "$OUT/tri" --clear_points 1 \
+  --Mapper.ba_refine_focal_length 0 --Mapper.ba_refine_principal_point 0 --Mapper.ba_refine_extra_params 0
+
+# 3) query 프레임을 그 모델에 등록(포즈 추정) = per-frame reloc
+"$COLMAP" image_registrator --database_path "$DB" --input_path "$OUT/tri" --output_path "$OUT/registered" \
+  --Mapper.ba_refine_focal_length 0 --Mapper.ba_refine_principal_point 0 --Mapper.ba_refine_extra_params 0
+"$COLMAP" model_converter --input_path "$OUT/registered" --output_path "$OUT/registered" --output_type TXT
+echo "[loc] registered 모델 → $OUT/registered ; query_names → $OUT/query_names.txt"
 ```
 
-- [ ] **Step 4: 빌드 성공 확인**
-
-Run: `until [ -x third_party/ORB_SLAM3/Examples/RGB-D/rgbd_localization ] || grep -qi error /tmp/build_reloc.log; do sleep 5; done; ls -l third_party/ORB_SLAM3/Examples/RGB-D/rgbd_localization`
-Expected: 실행파일 존재. 에러 시 `/tmp/build_reloc.log` 확인.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 2: 실행 (백그라운드)**
 
 ```bash
-git add third_party/ORB_SLAM3/Examples/RGB-D/rgbd_localization.cc third_party/ORB_SLAM3/CMakeLists.txt
-git commit -m "feat(reloc): RGB-D localization-mode runner (per-frame pose+state)"
+chmod +x scripts/localize_query_colmap.sh
+nohup bash scripts/localize_query_colmap.sh 80 4 > outputs/ros2_bag2_home_rgbd/reloc_pnp/run.log 2>&1 < /dev/null &
+```
+
+- [ ] **Step 3: 완료 대기 + query 등록 성공률**
+
+Run:
+```bash
+until grep -qE "registered 모델|ERROR|error" outputs/ros2_bag2_home_rgbd/reloc_pnp/run.log; do sleep 10; done
+REG=$(grep -vc '^#' outputs/ros2_bag2_home_rgbd/reloc_pnp/registered/images.txt)
+echo "등록 이미지(ref+query) 절반=$((REG/2)); query 목표 $(wc -l < outputs/ros2_bag2_home_rgbd/reloc_pnp/query_names.txt)"
+```
+Expected: registered/images.txt에 ref(224)+등록된 query. query가 0개 등록이면 매칭 부족 → STRIDE 줄이거나 query를 reference 시간대 근처로. 진행 전 query 등록 >0 확인.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/localize_query_colmap.sh
+git commit -m "feat(reloc): COLMAP per-frame query localization against orbframe model"
 ```
 
 ---
 
-### Task 3: Stage 1 실행 — home reloc pose 생성
+### Task 3: registered 모델 → TUM reloc pose 파일
 
 **Files:**
-- Create: `outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt` (산출물, gitignore)
+- Create: `scripts/export_reloc_poses.py`
+- Test: `scripts/test_export_reloc_poses.py`
 
 **Interfaces:**
-- Consumes: Task 2 실행파일, Task 1 yaml, associations.txt.
-- Produces: 프레임별 reloc pose 로그(Twc TUM + state). reloc 성공률 수치.
+- Consumes: `outputs/ros2_bag2_home_rgbd/reloc_pnp/registered/images.txt`(orbframe 좌표), `query_names.txt`.
+- Produces: `outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt` — query 프레임만, 각 줄 `ts tx ty tz qx qy qz qw state`(state 2=등록됨). Stage 2(Task 4·5)가 이 포맷·경로를 그대로 소비.
+- 함수 `colmap_image_to_twc_tum(qw,qx,qy,qz,tx,ty,tz) -> (cx,cy,cz, qx,qy,qz,qw)`: COLMAP Tcw(qw qx qy qz tx ty tz)를 Twc TUM(카메라중심 + R_wc 쿼터니언 x,y,z,w)으로 변환.
 
-- [ ] **Step 1: localization 실행 (백그라운드, headless)**
+- [ ] **Step 1: 실패 테스트 작성**
 
-```bash
-mkdir -p outputs/ros2_bag2_home_rgbd/reloc
-B=third_party/ORB_SLAM3
-nohup bash -c "$B/Examples/RGB-D/rgbd_localization \
-  $B/Vocabulary/ORBvoc.txt configs/ros2_bag2_home_rgbd_localization.yaml \
-  data/processed/ros2_bag2_home_rgbd/rgb data/processed/ros2_bag2_home_rgbd/associations.txt \
-  outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt" \
-  > outputs/ros2_bag2_home_rgbd/reloc/run.log 2>&1 < /dev/null &
+```python
+# scripts/test_export_reloc_poses.py
+import numpy as np
+from export_reloc_poses import colmap_image_to_twc_tum
+
+def test_identity_tcw_gives_origin_twc():
+    # Tcw=identity → 카메라 중심 원점, 회전 identity
+    cx,cy,cz, qx,qy,qz,qw = colmap_image_to_twc_tum(1,0,0,0, 0,0,0)
+    assert np.allclose([cx,cy,cz],[0,0,0], atol=1e-6)
+    assert np.allclose([qx,qy,qz,qw],[0,0,0,1], atol=1e-6)
+
+def test_translation_tcw_center_is_negative_R_t():
+    # Tcw t=(0,0,5), R=I → 카메라 중심 C=-R^T t=(0,0,-5)
+    cx,cy,cz,*_ = colmap_image_to_twc_tum(1,0,0,0, 0,0,5)
+    assert np.allclose([cx,cy,cz],[0,0,-5], atol=1e-6)
 ```
 
-- [ ] **Step 2: 완료 대기 + reloc 성공률 확인**
+- [ ] **Step 2: 테스트 실패 확인**
 
-Run:
-```bash
-until grep -qiE "shutdown|saving|error|terminate" outputs/ros2_bag2_home_rgbd/reloc/run.log; do sleep 10; done
-awk '{c++; if($9==2) ok++} END{printf "frames %d, reloc/track OK %d (%.0f%%)\n", c, ok, 100*ok/c}' \
-  outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt
+Run: `cd scripts && python -m pytest test_export_reloc_poses.py -v`
+Expected: FAIL (모듈/함수 없음).
+
+- [ ] **Step 3: export_reloc_poses.py 구현**
+
+```python
+#!/usr/bin/env python3
+"""export_reloc_poses.py — COLMAP registered 모델(orbframe 좌표)에서 query 프레임 포즈를 TUM Twc로 추출.
+출력: outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt (ts tx ty tz qx qy qz qw state)."""
+import sys
+from pathlib import Path
+import numpy as np
+from scipy.spatial.transform import Rotation as Rot
+ROOT = Path(__file__).resolve().parents[1]; sys.path.insert(0, str(ROOT))
+from pipeline.backproject import read_colmap_images
+
+def colmap_image_to_twc_tum(qw, qx, qy, qz, tx, ty, tz):
+    R_cw = Rot.from_quat([qx, qy, qz, qw]).as_matrix()      # Tcw 회전
+    C = -R_cw.T @ np.array([tx, ty, tz])                    # 카메라 중심(world)
+    q = Rot.from_matrix(R_cw.T).as_quat()                   # R_wc → (x,y,z,w)
+    return (*C, *q)
+
+def main():
+    reg = ROOT/"outputs/ros2_bag2_home_rgbd/reloc_pnp/registered/images.txt"
+    qn = ROOT/"outputs/ros2_bag2_home_rgbd/reloc_pnp/query_names.txt"
+    out = ROOT/"outputs/ros2_bag2_home_rgbd/reloc/CameraTrajectory_reloc.txt"; out.parent.mkdir(parents=True, exist_ok=True)
+    imgs = read_colmap_images(reg)                          # {name: (qw,qx,qy,qz,tx,ty,tz)}
+    queries = [l.strip() for l in open(qn) if l.strip()]
+    n = 0
+    with open(out, "w") as f:
+        for name in sorted(queries, key=lambda s: float(s.rsplit('.',1)[0])):
+            ts = name.rsplit('.',1)[0]
+            if name in imgs:                                # 등록 성공
+                cx,cy,cz,qx,qy,qz,qw = colmap_image_to_twc_tum(*imgs[name])
+                f.write(f"{ts} {cx:.7f} {cy:.7f} {cz:.7f} {qx:.7f} {qy:.7f} {qz:.7f} {qw:.7f} 2\n"); n+=1
+            else:                                           # 등록 실패 = LOST
+                f.write(f"{ts} 0 0 0 0 0 0 1 3\n")
+    print(f"[export] query {len(queries)}, 등록 {n} ({100*n/max(len(queries),1):.0f}%) → {out}")
+
+if __name__ == "__main__":
+    main()
 ```
-Expected: 프레임 다수에서 state==2(OK). 성공률 0%면 맵 로드 실패 → run.log에서 `LoadAtlasFromFile` 라인 확인(맵 경로/버전 불일치). 진행 전 반드시 >0%.
 
-- [ ] **Step 3: Commit (코드 없음 — 산출물은 gitignore, 로그만 기록)**
+- [ ] **Step 4: 단위테스트 통과 + 실행**
 
-산출물은 커밋하지 않는다. 성공률을 다음 태스크 검증의 입력으로 보고만 한다.
+Run: `cd scripts && python -m pytest test_export_reloc_poses.py -v` → 2 PASS.
+그다음: `conda run -n xrsplat python scripts/export_reloc_poses.py` → 등록률 출력, `CameraTrajectory_reloc.txt` 생성.
+Expected: 등록률 >0%, 파일에 query 줄 존재.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/export_reloc_poses.py scripts/test_export_reloc_poses.py
+git commit -m "feat(reloc): export COLMAP-registered query poses to TUM reloc file"
+```
 
 ---
 
