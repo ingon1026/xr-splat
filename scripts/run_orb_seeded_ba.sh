@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run_orb_seeded_ba.sh — Strategy A 전체 파이프라인: ORB 포즈 시드 → COLMAP BA 정제.
 #   재투영 BA는 전역 scale/rot/trans가 null-space → ORB metric 좌표계 보존 + cm급 per-pose 교정(=+5dB).
-#   COLMAP 4.x는 rigs/frames.txt를 요구 → mapper로 db-일관 골격 생성 후 ORB 포즈만 주입(make_orb_seed_model.py).
+#   COLMAP 4.x는 rigs/frames.txt를 요구 → db에서 직접 골격 생성 + ORB 포즈 주입(make_orb_seed_from_db.py).
 #   전제: 03_tum_to_colmap.py가 ORB COLMAP 모델(data/processed/<scene>/colmap/sparse/0) 생성 완료.
 # usage: run_orb_seeded_ba.sh <scene> [matcher: seq|exhaustive] [overlap]
 set -eo pipefail
