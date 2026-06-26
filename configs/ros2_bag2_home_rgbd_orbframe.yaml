@@ -1,0 +1,30 @@
+# xr-splat scene config — home orbframe (flagship 자산)
+# 단일 진실원: 이 한 파일이 input·단계별 knob·tag를 정의. 흩어진 인자 흡수.
+scene: ros2_bag2_home_rgbd_orbframe
+orb_scene: ros2_bag2_home_rgbd        # 프레임무결성 기준 ORB run
+
+input:
+  type: bag
+  path: data/raw/room1.bag            # (예시; orbframe은 sfmsnap 파생이라 직접 추출 경로는 참고용)
+  depth_scale: 1000
+
+slam:
+  nfeatures: 1250
+
+validate:
+  enabled: true
+  baseline: [0.15, 0.4]               # 대형 D455 scene 보정
+  pass_cm: 4.0
+  crop: 0.6
+
+train:
+  strategy: mcmc
+  cap_max: 2000000
+  iters: 30000
+  depth_lambda: 0.2
+  holdout_every: 8
+  tag: mcmc2m
+
+postprocess:
+  opacity: 0.05
+  sh_out: 1
