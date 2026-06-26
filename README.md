@@ -110,6 +110,26 @@ bash third_party/build_orbslam3.sh   # applies repo patches, then builds
 
 ## Usage
 
+### Unified CLI (recommended)
+
+One entry point drives the whole thing via a per-scene config (`configs/<scene>.yaml`):
+
+```bash
+# Offline: build the asset end-to-end (01→08, gated, resumable) + XR-readiness report.
+# Re-running skips already-completed stages (idempotent); --force re-runs.
+python xrsplat.py build configs/<scene>.yaml
+
+python xrsplat.py report   <scene>                 # XR-ready gate verdict
+python xrsplat.py view     <scene> [--port 8080]   # 3D Gaussian viewer (browser)
+python xrsplat.py localize <scene> <query.png> --render-out out.png   # locate one frame + render at found pose
+python xrsplat.py run      <scene> <frames_dir>    # localize→render loop over a frame stream
+```
+
+A scene config (`pipeline/config.py` schema) is the single source of truth for input,
+per-stage knobs (validate thresholds, train strategy/cap, postprocess) and paths.
+
+### Individual stages (still available)
+
 ```bash
 # 1. Extract capture → TUM RGB-D layout (also accepts TUM/Replica datasets directly)
 python scripts/01_extract_bag.py bag \
