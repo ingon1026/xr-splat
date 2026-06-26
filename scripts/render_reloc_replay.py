@@ -8,7 +8,6 @@ from pathlib import Path
 import numpy as np, torch, cv2, imageio.v2 as imageio
 from scipy.spatial.transform import Rotation as Rot
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pipeline.gsplat_io import load_ply, render
 from pipeline.backproject import read_colmap_cameras
 DEV = "cuda"; ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +21,9 @@ def twc_line_to_viewmat(tx, ty, tz, qx, qy, qz, qw):
 
 
 def main():
+    # Keep gsplat import lazy so pure pose tests can run without CUDA/gsplat installed.
+    from pipeline.gsplat_io import load_ply, render
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--reloc", required=True, type=Path)
     ap.add_argument("--scene", default="ros2_bag2_home_rgbd_orbframe")
@@ -29,12 +31,14 @@ def main():
     ap.add_argument("--start", type=int, default=0); ap.add_argument("--end", type=int, default=-1)
     ap.add_argument("--stride", type=int, default=2); ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--fps", type=int, default=18)
+    ap.add_argument("--gs-tag", default="", help="gsplat 태그: 비면 gsplat/scene.ply, 있으면 gsplat_<tag>/scene.ply")
     ap.add_argument("--out", type=Path, default=ROOT/"docs/assets/reloc_replay_home.mp4")
     a = ap.parse_args()
     proc = ROOT/"data/processed"/a.scene; rgbdir = ROOT/"data/processed"/a.rgb_scene/"rgb"
     W, H, fx, fy, cx, cy = read_colmap_cameras(proc/"colmap/sparse/0/cameras.txt")
     K = torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1.]], device=DEV)
-    g = load_ply(ROOT/"outputs"/a.scene/"gsplat/scene.ply", DEV)
+    gs_sub = "gsplat" + (f"_{a.gs_tag}" if a.gs_tag else "")
+    g = load_ply(ROOT/"outputs"/a.scene/gs_sub/"scene.ply", DEV)
     lines = [l.split() for l in open(a.reloc) if len(l.split()) >= 9]
     end = len(lines) if a.end < 0 else a.end
     lines = lines[a.start:end:a.stride]

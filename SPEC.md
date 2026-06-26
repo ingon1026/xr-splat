@@ -260,6 +260,26 @@ xr-splat/
   step6700 5.7M, GPU OOM직전). 정상 plateau 기준(sfmsnap=2.0M 고정)과 비교 판단 — 폭주 시 `--refine-stop`을 입증
   카운트(~2M)에 맞춰 조기 정지(M1도 hold-out 발산에 동일). 대형 공간은 GPU 메모리가 밀도를 제한해 small scene보다 soft.
 
+### MCMC strategy 도입 결론 (2026-06-25 실험, home 자산)
+
+home 자산(ros2_bag2_home_rgbd_orbframe)에서 DefaultStrategy와 MCMCStrategy를 비교한 결과를 기록한다.
+
+**holdout 28뷰 동일 프로토콜 수치:**
+
+| 자산 | 가우시안 | PSNR | SSIM | LPIPS |
+|---|---|---|---|---|
+| 기존 default (refine-stop 5000) | 2.24M | 23.82 | 0.785 | 0.391 |
+| **mcmc2m (채택)** | 2.0M | 27.96 | 0.871 | 0.267 |
+| mcmc3m | 3.0M | 27.87 | 0.874 | 0.255 |
+
+**병목 진단**: 기존 2M은 `--refine-stop 5000`에서 densification이 조기 동결돼 가우시안 배치가 나빴다. 같은 2M 예산을 MCMC로 학습 내내 정제하니 배치 문제가 해소됐다. 즉 **병목은 raw-count가 아니라 가우시안 배치/정제**였다.
+
+**통제 비교(타일링 선반행 근거)**: mcmc2m vs mcmc3m은 cap_max만 다르고 나머지 인자가 동일하다. 결과는 사실상 동률(27.96 vs 27.87 PSNR)인데 3M은 메모리·디스크 +50%. 따라서 **scene 타일링은 불필요·선반행(shelved)**. init 80k점·단일 패스 커버리지 구조상 품질 천장은 메모리가 아니라 입력 정보량이라는 점과도 일치.
+
+**주의**: 기존→mcmc2m의 +4.1dB는 순수 strategy 교체 효과가 아니다. 두 실험 간 차이가 4개(default→mcmc / refine-stop 5k→25k / means-lr 지수감쇠 / opacity·scale 정규화)이므로 "MCMC = +4dB"로 해석하지 말 것.
+
+**채택안**: mcmc2m — 기존과 동수 2M, 더 작은 파일, 3M의 미세 우위는 +50% 크기값 안 함. 드라이버: `scripts/run_home_mcmc.sh`. 평가: `scripts/eval_home_mcmc.py`.
+
 ---
 
 ## 4. 전역 코딩 규칙
