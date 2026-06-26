@@ -157,7 +157,9 @@ content("한 장 요약 — 어떤 알고리즘이 어디서 뭘 하나", "정�
     (0, "PnP relocalization → 런타임 위치추정 (2D-3D 매칭 + PnP/RANSAC)", ACC),
     (1, ""),
     (0, "맵 생성 = 기하(SLAM/SfM) + 외형(3DGS),  렌더 = 포즈 + splatting", GREEN),
-    (0, "분리했기에 위치는 정확하게, 화면은 실사같게 — 각자 잘하는 걸로", NAVY)])
+    (0, "분리했기에 위치는 정확하게, 화면은 실사같게 — 각자 잘하는 걸로", NAVY),
+    (1, ""),
+    (0, "실측 품질 (home mcmc2m): PSNR 27.96 / SSIM 0.871 / LPIPS 0.267", GREEN)])
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 prs.save(str(OUT))

@@ -9,7 +9,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
 ROOT = Path(__file__).resolve().parents[1]
-STILL = ROOT / "docs/assets/reloc_demo_still.png"
+STILL = ROOT / "docs/assets/reloc_demo_still_mcmc2m.png"
 OUT = ROOT / "docs/presentation/xr-splat-decoupled.pptx"
 
 NAVY = RGBColor(0x12, 0x1B, 0x2E); INK = RGBColor(0x1A, 0x1A, 0x1A)
@@ -143,15 +143,16 @@ content("결과 종합", "結", [
     (0, "통합형 → decoupled, 처음부터 끝까지 데이터로 증명", NAVY),
     (1, "통합형 4종: 한계 확인 (렌더·트래킹·속도)"),
     (1, "decoupled 원리(M1): ✅ Δ0.13dB", GREEN),
-    (1, "실사 자산(M2 home): ✅ 23.82, 프레임 유효", GREEN),
+    (1, "실사 자산(M2 home, mcmc2m): ✅ PSNR 27.96 / SSIM 0.871 / LPIPS 0.267, 프레임 유효", GREEN),
     (1, "런타임 reloc→render: ✅ 10/10, 앵커 0cm", GREEN),
     (1, "→ ‘통합 모델보다 분리가 옳았다’", ACC)])
 
-content("남은 한계 & 다음", "結", [
-    (0, "시각 품질은 ‘알아보지만 soft’ — 실사급엔 한 칸 부족", NAVY),
-    (1, "원인: 대형 공간(home 28m) + GPU 12GB가 가우시안 밀도 제한 (메모리 천장)"),
-    (1, "다음 후보: scene 타일링(품질) / 잘 찍은 캡처 / XR 뷰어 통합"),
-    (1, "단, 연구 방향(분리가 맞다)은 결론남", GREEN)])
+content("품질 해소 & 다음", "結", [
+    (0, "시각 품질 — MCMC strategy로 해소 (mcmc2m 채택)", NAVY),
+    (1, "기존 2M(refine-stop 5k 동결) 23.82 → mcmc2m 27.96 PSNR (+4.1dB, LPIPS 0.39→0.27)", GREEN),
+    (1, "병목은 raw-count가 아니라 배치/정제 — 같은 2M을 계속 정제하니 풀림"),
+    (1, "scene 타일링: 통제 비교(2M≈3M)로 불필요 확인 → 선반행", ACC),
+    (0, "다음: ad-server 복귀 (motion 18개 smoke test)", NAVY)])
 
 content("결론", "結", [
     (0, "통합형 Gaussian-SLAM은 이론은 매력적이나 렌더·트래킹·속도를 동시 만족 못 함", INK),
