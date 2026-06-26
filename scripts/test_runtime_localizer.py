@@ -19,6 +19,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from pipeline.backproject import read_colmap_images, read_colmap_cameras  # noqa: E402
 from pipeline.runtime import OK, LOST                                       # noqa: E402
+
+import pytest  # noqa: E402
+pytest.importorskip("gsplat")  # gsplat(CUDA) 없는 환경에선 이 모듈만 skip — 순수 테스트는 계속 동작
 from runtime_localizer import PhotometricLocalizer                          # noqa: E402
 
 # ── 자산 경로 ──
