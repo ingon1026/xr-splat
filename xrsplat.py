@@ -24,7 +24,19 @@ sys.path.insert(0, str(ROOT / "scripts"))
 def cmd_build(a):
     from pipeline.config import load_config
     from pipeline.orchestrator import build
-    build(load_config(a.scene), force=a.force)
+    cfg = load_config(a.scene)
+    build(cfg, force=a.force)
+    if not a.no_showcase:
+        _run_showcase(cfg.scene)
+
+
+def _run_showcase(scene):
+    """build 후 결과 팩(mp4·지표·갤러리·localize→render·궤적) 자동 생성."""
+    subprocess.run([sys.executable, str(ROOT / "scripts/make_showcase.py"), scene], check=False)
+
+
+def cmd_showcase(a):
+    _run_showcase(a.scene)
 
 
 def cmd_report(a):
@@ -79,9 +91,13 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    b = sub.add_parser("build", help="오프라인 파이프라인 01→08 + report")
+    b = sub.add_parser("build", help="오프라인 파이프라인 01→08 + report + 결과 팩")
     b.add_argument("scene"); b.add_argument("--force", action="store_true")
+    b.add_argument("--no-showcase", action="store_true", help="끝에 결과 팩 자동생성 생략")
     b.set_defaults(func=cmd_build)
+
+    sc = sub.add_parser("showcase", help="결과 팩 생성(mp4·지표·갤러리·localize→render·궤적)")
+    sc.add_argument("scene"); sc.set_defaults(func=cmd_showcase)
 
     r = sub.add_parser("report", help="XR-ready 게이트 판정")
     r.add_argument("scene"); r.set_defaults(func=cmd_report)
