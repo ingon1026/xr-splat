@@ -120,7 +120,6 @@ def _build(cls, data):
         if f.name not in data or data[f.name] is None:
             continue
         v = data[f.name]
-        ftype = f.type
         # 중첩 dataclass면 재귀
         nested = {"input": InputCfg, "slam": SlamCfg, "validate": ValidateCfg,
                   "train": TrainCfg, "postprocess": PostCfg}.get(f.name)

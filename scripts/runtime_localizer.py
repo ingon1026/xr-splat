@@ -45,9 +45,10 @@ class PhotometricLocalizer(Localizer):
         device:   "cuda" 권장.
     """
 
-    def __init__(self, ply_path, K: torch.Tensor, W: int, H: int, device: str = "cuda",
+    def __init__(self, ply_or_g, K: torch.Tensor, W: int, H: int, device: str = "cuda",
                  reloc_iters: int = 150, track_iters: int = 50):
-        self.g = load_ply(ply_path, device)
+        # 경로(str/Path) 또는 이미 로드된 가우시안(dict) 둘 다 허용 → 이중 로드 방지
+        self.g = ply_or_g if isinstance(ply_or_g, dict) else load_ply(ply_or_g, device)
         self.K = K
         self.W = W
         self.H = H

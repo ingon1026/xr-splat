@@ -84,7 +84,8 @@ def main():
 
     # ── 2) fly-through (KF 보간 walk-through) ──
     win = names[:: max(1, len(names) // 36)][:36]
-    Rs = [vm_of(n)[:3, :3] for n in win]; Cs = np.array([-vm_of(n)[:3, :3].T @ vm_of(n)[:3, 3] for n in win])
+    win_vm = [vm_of(n) for n in win]                     # quat→matrix 1회/프레임 (반복 변환 제거)
+    Rs = [vm[:3, :3] for vm in win_vm]; Cs = np.array([-vm[:3, :3].T @ vm[:3, 3] for vm in win_vm])
     key = np.arange(len(win)); slerp = Slerp(key, Rot.from_matrix(np.array(Rs)))
     frames = []
     for t in np.linspace(0, len(win) - 1, 120):
@@ -124,7 +125,7 @@ def main():
         # 궤적 plot
         try:
             import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
-            kfc = np.array([-vm_of(n)[:3, :3].T @ vm_of(n)[:3, 3] for n in names]); qc = np.array(qc)
+            kfc = np.array([(lambda vm: -vm[:3, :3].T @ vm[:3, 3])(vm_of(n)) for n in names]); qc = np.array(qc)
             ext = kfc.max(0) - kfc.min(0); a, b = sorted(np.argsort(ext)[-2:]); L = {0: "X", 1: "Y", 2: "Z"}
             fig, ax = plt.subplots(figsize=(9, 7))
             ax.plot(kfc[:, a], kfc[:, b], "-", c="#2a9d4a", lw=1.6, label=f"SLAM trajectory ({len(names)} KF)")

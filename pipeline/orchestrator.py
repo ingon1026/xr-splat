@@ -150,9 +150,12 @@ def build(cfg, force=False):
         )
 
     # ── 04: 초기 포인트클라우드 ─────────────────────────────────────
-    points_init_ply = cfg.proc_dir / "colmap" / "points_init.ply"
-    if not force and points_init_ply.exists():
-        _skip("04_make_pointcloud", f"points_init.ply 이미 있음: {points_init_ply}")
+    points3d_txt = cfg.sparse_dir / "points3D.txt"
+    # train이 실제로 읽는 건 points3D.txt → points_init.ply만 보면 빈 points3D에 skip되는 edge-case.
+    has_points3d = points3d_txt.exists() and any(
+        l.strip() and not l.startswith("#") for l in open(points3d_txt))
+    if not force and has_points3d:
+        _skip("04_make_pointcloud", f"points3D.txt 채워짐: {points3d_txt}")
     else:
         cmd = [sys.executable, str(SCRIPTS / "04_make_pointcloud.py"), "--scene", cfg.scene]
         if cfg.exclude_list:
