@@ -136,6 +136,11 @@ def main():
         except Exception as e:
             print(f"[showcase] path plot skip: {e}")
 
+    # 배포용 경량 .ply를 결과 팩에 포함(자체완결). 풀버전은 부모 gsplat_<tag>/scene.ply.
+    if cfg.asset_lite.exists():
+        import shutil
+        shutil.copy(cfg.asset_lite, res / "scene_lite.ply")
+
     (res / "showcase_metrics.json").write_text(json.dumps(m, ensure_ascii=False, indent=2))
     md = [f"# {cfg.scene} — showcase 결과 팩\n",
           f"- 자산: {n_gauss:,} gaussians, {m['asset_ply_mb']} MB ({cfg.asset_ply})",
