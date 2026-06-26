@@ -89,12 +89,11 @@ class MergedMap:
             return mod.PnPLocalizer(cfg.feature_map, self.K_np)
 
         elif kind == "photometric":
-            import torch  # already imported above, but kept explicit
             mod = _load_module(
                 "runtime_localizer", ROOT / "scripts" / "runtime_localizer.py"
             )
             return mod.PhotometricLocalizer(
-                str(cfg.asset_ply), self.K_torch, self.W, self.H,
+                self._g, self.K_torch, self.W, self.H,   # 이미 로드된 가우시안 재사용(이중 ply 로드·VRAM 2배 방지)
                 device=self.device,
             )
 
