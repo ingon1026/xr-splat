@@ -5,8 +5,7 @@
 # ponytail: room1 전용 1회 드라이버. 다른 scene 일반화는 필요해지면 그때.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source /home/ingon/miniconda3/etc/profile.d/conda.sh
-set +u; conda activate xrsplat; set -u
+source "$ROOT/scripts/env.sh"
 P=python
 
 BA="$ROOT/outputs/d455_room1/orb_seeded_ba/ba_final"
@@ -26,7 +25,6 @@ else
 fi
 
 echo "===== ④ gsplat 학습 (포즈 고정 + depth, 사람 170KF 제외) $(date) ====="
-export CUDA_HOME="$CONDA_PREFIX" TORCH_CUDA_ARCH_LIST="8.9" CC=/usr/bin/gcc-11 CXX=/usr/bin/g++-11
 $P "$ROOT/scripts/train_gsplat.py" --scene "$SCENE" --iters 30000 --exclude-list "$EXCL"
 
 echo "===== ⑤ prune floaters $(date) ====="

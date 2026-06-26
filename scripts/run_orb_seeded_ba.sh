@@ -9,12 +9,12 @@ SCENE="${1:?usage: run_orb_seeded_ba.sh <scene> [seq|exhaustive] [overlap]}"
 MATCHER="${2:-seq}"          # 연속 핸드헬드 시퀀스=seq(빠름), 정적 비연속=exhaustive
 OVERLAP="${3:-20}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/scripts/env.sh"
 PROC="$ROOT/data/processed/$SCENE"
 ORBMODEL="$PROC/colmap/sparse/0"
 OUT="$ROOT/outputs/$SCENE/orb_seeded_ba"
-COLMAP=/home/ingon/miniconda3/envs/colmap/bin/colmap
-export LD_LIBRARY_PATH=/home/ingon/miniconda3/envs/colmap/lib
-P=/home/ingon/miniconda3/envs/xrsplat/bin/python
+COLMAP="$COLMAP_BIN"
+P="$XRSPLAT_PYTHON"
 mkdir -p "$OUT"; DB="$OUT/database.db"; rm -f "$DB"
 RGB="$(readlink -f "$PROC/rgb")"
 [ -f "$ORBMODEL/images.txt" ] || { echo "[orbba] ORB 모델 없음: $ORBMODEL (먼저 03 실행)"; exit 1; }

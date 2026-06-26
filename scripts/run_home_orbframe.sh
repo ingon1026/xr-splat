@@ -4,8 +4,7 @@
 #   §2 게이트: 05 PASS 전 학습 금지 → FAIL이면 학습 진입 없이 종료.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source /home/ingon/miniconda3/etc/profile.d/conda.sh; set +u; conda activate xrsplat; set -u
-export CUDA_HOME="$CONDA_PREFIX" TORCH_CUDA_ARCH_LIST="8.9" CC=/usr/bin/gcc-11 CXX=/usr/bin/g++-11
+source "$ROOT/scripts/env.sh"
 SCENE=ros2_bag2_home_rgbd_orbframe
 
 echo "===== KeyFrameTrajectory 생성 (colmap → TUM Twc) $(date) ====="

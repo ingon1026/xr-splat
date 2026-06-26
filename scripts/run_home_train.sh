@@ -4,8 +4,7 @@
 #   n_gauss 2M까지 성장 후 refine-stop(15000) plateau는 정상(기존 sfmsnap 동일). OOM 아님.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source /home/ingon/miniconda3/etc/profile.d/conda.sh; set +u; conda activate xrsplat; set -u
-export CUDA_HOME="$CONDA_PREFIX" TORCH_CUDA_ARCH_LIST="8.9" CC=/usr/bin/gcc-11 CXX=/usr/bin/g++-11
+source "$ROOT/scripts/env.sh"
 SCENE=ros2_bag2_home_rgbd_orbframe
 
 echo "===== gsplat 재학습 (포즈 고정+depth, holdout 8, refine-stop 5000) $(date) ====="
