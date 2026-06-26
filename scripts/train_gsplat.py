@@ -118,6 +118,11 @@ def main():
     ap.add_argument("--scale-reg", type=float, default=0.01, help="mcmc 전용: scale L1 정규화")
     ap.add_argument("--exclude-list", type=Path, help="학습/holdout에서 제외할 이미지명 목록(동적/사람 구간 KF)")
     args = ap.parse_args()
+    train_loop(args)
+
+
+def train_loop(args):
+    """학습 루프 본체. main()이 인자 파싱 후 호출하거나 orchestrator가 직접 호출."""
     device = "cuda"
     proc = args.root / "data" / "processed" / args.scene
     out = args.root / "outputs" / args.scene / ("gsplat" + (f"_{args.tag}" if args.tag else ""))
