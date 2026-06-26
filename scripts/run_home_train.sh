@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# run_home_train.sh — home orbframe 학습만(05 게이트는 이미 PASS·음성대조 통과 검증됨, 생략).
+# run_home_train.sh — [구버전 default 비교용: 정식 학습 드라이버는 run_home_mcmc.sh]
+# home orbframe 학습만(05 게이트는 이미 PASS·음성대조 통과 검증됨, 생략).
 #   n_gauss 2M까지 성장 후 refine-stop(15000) plateau는 정상(기존 sfmsnap 동일). OOM 아님.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

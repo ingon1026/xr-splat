@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as Rot
 from gsplat import rasterization
-from gsplat.strategy import DefaultStrategy
+from gsplat.strategy import DefaultStrategy, MCMCStrategy
 from pytorch_msssim import ssim as ssim_fn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -111,6 +111,11 @@ def main():
     ap.add_argument("--holdout-every", type=int, default=0, help="매 N번째 뷰를 학습에서 제외(평가용). 0=없음")
     ap.add_argument("--tag", default="", help="출력 서브디렉토리 접미사 (예: m1)")
     ap.add_argument("--refine-stop", type=int, default=15000, help="densification 중단 step (hold-out 발산 방지로 낮춤)")
+    ap.add_argument("--strategy", choices=["default", "mcmc"], default="default",
+                    help="densification 전략. mcmc는 cap_max로 가우시안 수 하드캡(천장 안 품질↑)")
+    ap.add_argument("--cap-max", type=int, default=2_000_000, help="mcmc 전용: 최대 가우시안 수")
+    ap.add_argument("--opacity-reg", type=float, default=0.01, help="mcmc 전용: opacity L1 정규화")
+    ap.add_argument("--scale-reg", type=float, default=0.01, help="mcmc 전용: scale L1 정규화")
     ap.add_argument("--exclude-list", type=Path, help="학습/holdout에서 제외할 이미지명 목록(동적/사람 구간 KF)")
     args = ap.parse_args()
     device = "cuda"
@@ -138,9 +143,19 @@ def main():
     optimizers = {k: torch.optim.Adam([params[k]], lr=lrs[k], eps=1e-15) for k in params}  # 포즈 텐서 없음
     print(f"[train] optimizer param groups (포즈 고정 증거): {sorted(optimizers.keys())}")
 
-    strategy = DefaultStrategy(verbose=False, refine_stop_iter=args.refine_stop)
-    strategy.check_sanity(params, optimizers)
-    state = strategy.initialize_state(scene_scale=scene_scale)
+    if args.strategy == "mcmc":
+        strategy = MCMCStrategy(verbose=False, cap_max=args.cap_max)
+        strategy.check_sanity(params, optimizers)
+        state = strategy.initialize_state()
+        # MCMC noise는 means LR로 스케일됨(scaler=lr·noise_lr). LR 고정이면 noise가 끝까지 안 식어
+        # 그 자체로 soft → 학습 끝에 ~1%까지 지수 감쇠(gsplat MCMC 예제 표준).
+        means_sched = torch.optim.lr_scheduler.ExponentialLR(optimizers["means"], gamma=0.01 ** (1.0 / args.iters))
+    else:
+        strategy = DefaultStrategy(verbose=False, refine_stop_iter=args.refine_stop)
+        strategy.check_sanity(params, optimizers)
+        state = strategy.initialize_state(scene_scale=scene_scale)
+        means_sched = None
+    print(f"[train] strategy={args.strategy}" + (f" cap_max={args.cap_max}" if args.strategy == "mcmc" else ""))
 
     log = open(out / "train_log.jsonl", "w")
     rng = np.random.default_rng(0)
@@ -154,20 +169,28 @@ def main():
             torch.sigmoid(params["opacities"]), colors,
             v["viewmat"][None], K[None], W, H,
             sh_degree=sh_deg, render_mode="RGB+ED", absgrad=False, packed=False)
-        info["means2d"].retain_grad()
         rgb_pred = render[0, ..., :3]
         depth_pred = render[0, ..., 3]
-        strategy.step_pre_backward(params, optimizers, state, step, info)
+        if args.strategy == "default":
+            info["means2d"].retain_grad()                                    # MCMC는 2D grad 미사용
+            strategy.step_pre_backward(params, optimizers, state, step, info)
         l1 = F.l1_loss(rgb_pred, v["rgb"])
         ssim_l = 1 - ssim_fn(rgb_pred.permute(2, 0, 1)[None], v["rgb"].permute(2, 0, 1)[None], data_range=1.0)
         dmask = v["depth"] > 0
         depth_l = F.l1_loss(depth_pred[dmask], v["depth"][dmask]) if dmask.any() else torch.zeros((), device=device)
         loss = (1 - args.ssim_lambda) * l1 + args.ssim_lambda * ssim_l + args.depth_lambda * depth_l
+        if args.strategy == "mcmc":                                          # MCMC 필수 정규화(없으면 품질 저하)
+            loss = loss + args.opacity_reg * torch.sigmoid(params["opacities"]).abs().mean() \
+                        + args.scale_reg * torch.exp(params["scales"]).abs().mean()
         loss.backward()
         torch.nn.utils.clip_grad_norm_([params["means"]], max_norm=10.0)  # 위치 overshoot 방지(hold-out 무감독 영역 drift)
         for o in optimizers.values():
             o.step(); o.zero_grad(set_to_none=True)
-        strategy.step_post_backward(params, optimizers, state, step, info, packed=False)
+        if args.strategy == "mcmc":
+            strategy.step_post_backward(params, optimizers, state, step, info, lr=optimizers["means"].param_groups[0]["lr"])
+            means_sched.step()
+        else:
+            strategy.step_post_backward(params, optimizers, state, step, info, packed=False)
         if step % 100 == 0 or step == args.iters - 1:
             psnr = -10 * math.log10(max(F.mse_loss(rgb_pred, v["rgb"]).item(), 1e-10))
             rec = dict(step=step, loss=round(loss.item(), 5), l1=round(l1.item(), 5),
