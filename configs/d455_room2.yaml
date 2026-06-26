@@ -1,0 +1,29 @@
+# xr-splat scene config — room2 (D455 narrow capture, 0.65m). 통합 build 검증용.
+scene: d455_room2
+orb_scene: d455_room2                  # 자체 ORB run
+
+input:
+  type: bag
+  path: data/raw/room2.bag
+  depth_scale: 1000
+
+slam:
+  nfeatures: 1250
+
+validate:
+  enabled: true
+  baseline: [0.1, 0.3]                 # narrow scene 보정
+  pass_cm: 5.0                         # narrow는 시차 적어 lenient
+  crop: 0.6
+
+train:
+  strategy: mcmc
+  cap_max: 2000000
+  iters: 8000                          # 통합 검증 속도 (production은 30000)
+  depth_lambda: 0.2
+  holdout_every: 8
+  tag: mcmc2m
+
+postprocess:
+  opacity: 0.05
+  sh_out: 1
