@@ -6,6 +6,7 @@ KF(images.txt 포즈 있는 프레임)마다 ORB 추출 → depth backproject �
   desc:     uint8  [N,32] — 각 점의 ORB descriptor
   K:        float32 [3,3] — 빌드 시 intrinsics (참고용)
 """
+import argparse
 import sys
 import json
 from pathlib import Path
@@ -17,10 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.backproject import read_colmap_images, colmap_world_RT  # noqa: E402
-
-DATA_DIR   = ROOT / "data/processed/ros2_bag2_home_rgbd_orbframe"
-COLMAP_DIR = DATA_DIR / "colmap/sparse/0"
-OUT_PATH   = ROOT / "outputs/ros2_bag2_home_rgbd_orbframe/feature_map.npz"
 
 N_FEATURES = 1000   # ORB keypoints per frame
 
@@ -45,6 +42,13 @@ def load_associations(path):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scene", default="ros2_bag2_home_rgbd_orbframe")
+    args = ap.parse_args()
+    DATA_DIR = ROOT / "data/processed" / args.scene
+    COLMAP_DIR = DATA_DIR / "colmap/sparse/0"
+    OUT_PATH = ROOT / "outputs" / args.scene / "feature_map.npz"
+
     # intrinsics
     fx, fy, cx, cy, depth_scale = load_intrinsics(DATA_DIR / "intrinsics.json")
     K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)

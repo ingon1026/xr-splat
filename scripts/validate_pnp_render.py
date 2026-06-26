@@ -22,22 +22,30 @@ from pipeline.runtime import OK  # noqa: E402
 from pnp_localizer import PnPLocalizer  # noqa: E402
 
 DEV = "cuda"
-SC = "ros2_bag2_home_rgbd_orbframe"
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--scene", default="ros2_bag2_home_rgbd_orbframe")
+    ap.add_argument("--tag", default="mcmc2m")
+    ap.add_argument("--frames", type=int, default=30)
+    args = ap.parse_args()
+    SC = args.scene
     proc = ROOT / "data/processed" / SC
     sp = proc / "colmap/sparse/0"
     W, H, fx, fy, cx, cy = read_colmap_cameras(sp / "cameras.txt")
     K_np = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1.0]], np.float32)
     kf = set(read_colmap_images(sp / "images.txt"))
+    kf_ts = sorted(float(n[:-4]) for n in kf)
+    lo, hi = kf_ts[0], kf_ts[-1]                                  # KF 시간범위 자동(전체 공간 커버)
     allrgb = [l.split()[1].split('/')[-1] for l in open(proc / "rgb.txt") if l.strip() and not l.startswith('#')]
-    nonkf = sorted([n for n in allrgb if n not in kf and 68.0 <= float(n[:-4]) <= 85.6],
-                   key=lambda x: float(x[:-4]))[:30]
-    print(f"[honest] non-KF query {len(nonkf)}개 (맵에 없음)", flush=True)
+    cand = sorted([n for n in allrgb if n not in kf and lo <= float(n[:-4]) <= hi], key=lambda x: float(x[:-4]))
+    nonkf = [cand[int(len(cand) * f)] for f in np.linspace(0, 0.999, args.frames)] if cand else []  # 전역에 골고루
+    print(f"[honest] {SC}: non-KF query {len(nonkf)}개 (맵에 없음, 시간 {lo:.0f}~{hi:.0f}s 전역)", flush=True)
 
     loc = PnPLocalizer(ROOT / "outputs" / SC / "feature_map.npz", K_np)
-    g = load_ply(ROOT / "outputs" / SC / "gsplat_mcmc2m/scene.ply", DEV)   # 풀 자산(2M) — 품질 제약
+    g = load_ply(ROOT / "outputs" / SC / f"gsplat_{args.tag}/scene.ply", DEV)   # 풀 자산 — 품질 제약
     Kt = torch.tensor(K_np, device=DEV)
     rows = []
     for n in nonkf:
