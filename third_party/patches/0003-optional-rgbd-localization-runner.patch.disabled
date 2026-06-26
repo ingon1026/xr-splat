@@ -1,0 +1,117 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index fbe8fc6..3deef21 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -145,6 +145,10 @@ add_executable(rgbd_tum
+         Examples/RGB-D/rgbd_tum.cc)
+ target_link_libraries(rgbd_tum ${PROJECT_NAME})
+ 
++add_executable(rgbd_localization
++        Examples/RGB-D/rgbd_localization.cc)
++target_link_libraries(rgbd_localization ${PROJECT_NAME})
++
+ if(realsense2_FOUND)
+     add_executable(rgbd_realsense_D435i
+             Examples/RGB-D/rgbd_realsense_D435i.cc)
+diff --git a/Examples/RGB-D/rgbd_localization.cc b/Examples/RGB-D/rgbd_localization.cc
+new file mode 100644
+index 0000000..6dc12ba
+--- /dev/null
++++ b/Examples/RGB-D/rgbd_localization.cc
+@@ -0,0 +1,96 @@
++/**
++* RGB-D localization-mode runner for ORB-SLAM3.
++* Loads a saved map, activates localization mode, and logs per-frame
++* pose + tracking state to an output file.
++*
++* Usage: ./rgbd_localization voc settings seq assoc out_reloc.txt
++* Output format (one line per frame):
++*   timestamp tx ty tz qx qy qz qw state
++* where pose is Twc (camera->world) in TUM convention and state 2 = OK.
++*/
++
++#include<iostream>
++#include<fstream>
++#include<iomanip>
++#include<algorithm>
++
++#include<opencv2/core/core.hpp>
++
++#include<System.h>
++
++using namespace std;
++
++void LoadImages(const string &strAssociationFilename, vector<string> &vstrImageFilenamesRGB,
++                vector<string> &vstrImageFilenamesD, vector<double> &vTimestamps);
++
++int main(int argc, char **argv)
++{
++    if(argc != 6)
++    {
++        cerr << "Usage: ./rgbd_localization voc settings seq assoc out_reloc.txt\n";
++        return 1;
++    }
++
++    vector<string> vRGB, vD;
++    vector<double> vT;
++    LoadImages(string(argv[4]), vRGB, vD, vT);
++    int n = vRGB.size();
++
++    // headless: viewer=false (WSLg Pangolin GL crashes)
++    ORB_SLAM3::System SLAM(argv[1], argv[2], ORB_SLAM3::System::RGBD, false);
++    SLAM.ActivateLocalizationMode(); // fix map, no new KFs
++
++    ofstream f(argv[5]);
++    f << fixed;
++
++    for(int ni=0; ni<n; ni++)
++    {
++        cv::Mat imRGB = cv::imread(string(argv[3])+"/"+vRGB[ni], cv::IMREAD_UNCHANGED);
++        cv::Mat imD   = cv::imread(string(argv[3])+"/"+vD[ni],   cv::IMREAD_UNCHANGED);
++        if(imRGB.empty())
++            continue;
++
++        double t = vT[ni];
++        Sophus::SE3f Tcw = SLAM.TrackRGBD(imRGB, imD, t);
++        int state = SLAM.GetTrackingState(); // 2 = OK/tracked or relocalized
++
++        Sophus::SE3f Twc = Tcw.inverse();
++        Eigen::Vector3f tw = Twc.translation();
++        Eigen::Quaternionf q = Twc.unit_quaternion();
++
++        f << setprecision(6) << t << " " << setprecision(7)
++          << tw.x() << " " << tw.y() << " " << tw.z() << " "
++          << q.x()  << " " << q.y()  << " " << q.z()  << " " << q.w() << " "
++          << state << "\n";
++    }
++
++    f.close();
++    SLAM.Shutdown();
++    return 0;
++}
++
++void LoadImages(const string &strAssociationFilename, vector<string> &vstrImageFilenamesRGB,
++                vector<string> &vstrImageFilenamesD, vector<double> &vTimestamps)
++{
++    ifstream fAssociation;
++    fAssociation.open(strAssociationFilename.c_str());
++    while(!fAssociation.eof())
++    {
++        string s;
++        getline(fAssociation,s);
++        if(!s.empty())
++        {
++            stringstream ss;
++            ss << s;
++            double t;
++            string sRGB, sD;
++            ss >> t;
++            vTimestamps.push_back(t);
++            ss >> sRGB;
++            vstrImageFilenamesRGB.push_back(sRGB);
++            ss >> t;
++            ss >> sD;
++            vstrImageFilenamesD.push_back(sD);
++        }
++    }
++}

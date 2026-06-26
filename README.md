@@ -74,6 +74,12 @@ than COLMAP's, confirming the SLAM poses are a sound foundation for Gaussian Spl
 > centers against TUM `groundtruth.txt`. Reproduce with
 > [`scripts/07_evaluate.py`](scripts/07_evaluate.py) (writes `outputs/<scene>/eval_m1.json`).
 
+**Milestone M2 — own D455 capture + runtime replay.** The best current asset is the home
+capture trained in the ORB frame with the MCMC strategy (`mcmc2m`): **27.96 PSNR / 0.871
+SSIM / 0.267 LPIPS** on 28 hold-out views. A COLMAP PnP relocalization replay also renders
+registered query poses directly in the Gaussian map frame. This is a runtime proof-of-concept,
+not yet a low-latency XR pose loop.
+
 Demo `.ply` assets will be distributed via [GitHub Releases](../../releases).
 
 ## Installation
@@ -106,7 +112,15 @@ bash third_party/build_orbslam3.sh   # applies repo patches, then builds
 
 ```bash
 # 1. Extract capture → TUM RGB-D layout (also accepts TUM/Replica datasets directly)
-python scripts/01_extract_bag.py --input data/raw/room1.bag --scene room1
+python scripts/01_extract_bag.py bag \
+  --bag data/raw/room1.bag \
+  --out data/processed/room1
+
+# Public dataset example:
+# python scripts/01_extract_bag.py dir \
+#   --dataset tum --variant fr1 \
+#   --src /path/to/rgbd_dataset_freiburg1_desk \
+#   --out data/processed/tum_fr1_desk
 
 # 2. Run ORB-SLAM3 (headless) → keyframe poses + Atlas map
 bash scripts/02_run_orbslam3.sh room1
@@ -121,6 +135,9 @@ python scripts/05_validate_poses.py --scene room1
 # 6. Train gsplat (poses frozen, depth supervision on)
 bash scripts/06_train_gsplat.sh room1
 
+# Current best home-asset training path uses gsplat MCMC with a 2M Gaussian cap:
+# bash scripts/run_home_mcmc.sh
+
 # 7–8. Evaluate, then prune/compress for XR deployment
 python scripts/07_evaluate.py --scene room1
 python scripts/08_postprocess.py --scene room1
@@ -128,7 +145,14 @@ python scripts/08_postprocess.py --scene room1
 
 Data and outputs are **not** stored in this repo — see [`data/README.md`](data/README.md) for how to obtain public datasets (TUM RGB-D, Replica) or capture your own.
 
-**Training framework (Phase 5):** gsplat (`rasterization` + `DefaultStrategy`) with a custom dense-depth loss. Chosen over nerfstudio splatfacto because neither ships turnkey dense per-pixel depth supervision for Gaussians (gsplat exposes depth rendering; splatfacto's depth loss is nerfacto-only), and gsplat is lighter, pre-verified on torch 2.1.2/cu121, and loads COLMAP directly. Camera poses stay **frozen** — no pose tensors in the optimizer (decoupled by design).
+**Training framework (Phase 5):** gsplat (`rasterization` + `DefaultStrategy` or
+`MCMCStrategy`) with a custom dense-depth loss. Chosen over nerfstudio splatfacto because
+neither ships turnkey dense per-pixel depth supervision for Gaussians (gsplat exposes depth
+rendering; splatfacto's depth loss is nerfacto-only), and gsplat is lighter, pre-verified on
+torch 2.1.2/cu121, and loads COLMAP directly. Camera poses stay **frozen** — no pose tensors
+in the optimizer (decoupled by design). For the current D455 home asset, `MCMCStrategy` with a
+2M Gaussian cap is the adopted path because it improved placement/quality without increasing
+the final Gaussian count.
 
 ## Repository structure
 
@@ -145,9 +169,9 @@ data/ outputs/  gitignored — reproduced locally by running the pipeline
 
 - [x] **M0** — scaffolding, ORB-SLAM3 headless build, TUM example run
 - [x] **M1** — end-to-end on public dataset, ORB poses vs COLMAP poses ≤ 0.5 dB (Δ 0.13 dB)
-- [ ] **M2** — end-to-end on own D455 capture
+- [x] **M2** — own D455 home capture, ORB-frame Gaussian asset, MCMC quality pass
 - [x] **M3** — post-processing, results & teaser
-- [ ] **M4** — public release
+- [ ] **M4** — reproducible release, automated XR-ready asset report, runtime pose loop
 
 ## License
 
