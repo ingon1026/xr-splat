@@ -45,12 +45,15 @@ class PhotometricLocalizer(Localizer):
         device:   "cuda" 권장.
     """
 
-    def __init__(self, ply_path, K: torch.Tensor, W: int, H: int, device: str = "cuda"):
+    def __init__(self, ply_path, K: torch.Tensor, W: int, H: int, device: str = "cuda",
+                 reloc_iters: int = 150, track_iters: int = 50):
         self.g = load_ply(ply_path, device)
         self.K = K
         self.W = W
         self.H = H
         self.device = device
+        self.reloc_iters = reloc_iters   # 실시간화 sweep용(기본=기존 동작)
+        self.track_iters = track_iters
 
     def _optimize(self, rgb: np.ndarray, vm_init: np.ndarray, iters: int):
         """vm_init 에서 se3 delta Adam 최적화.
@@ -96,14 +99,14 @@ class PhotometricLocalizer(Localizer):
                 confidence=0.0,
             )
 
-        vm_final, psnr = self._optimize(rgb, hint, iters=150)
+        vm_final, psnr = self._optimize(rgb, hint, iters=self.reloc_iters)
         conf  = _conf_from_psnr(psnr)
         state = OK if conf >= CONF_OK else LOST
         return PoseResult(T_map_cam=vm_final, state=state, confidence=conf)
 
     def track(self, rgb: np.ndarray, prior: PoseResult) -> PoseResult:
         """이전 포즈(prior)에서 50 iters 추적 (프레임간 빠른 경로)."""
-        vm_final, psnr = self._optimize(rgb, prior.T_map_cam, iters=50)
+        vm_final, psnr = self._optimize(rgb, prior.T_map_cam, iters=self.track_iters)
         conf  = _conf_from_psnr(psnr)
         state = OK if conf >= CONF_OK else LOST
         return PoseResult(T_map_cam=vm_final, state=state, confidence=conf)
