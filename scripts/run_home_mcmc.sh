@@ -6,8 +6,7 @@
 #   MCMC는 cap_max로 하드캡 → DefaultStrategy의 transient 5.7M OOM 없음.
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source /home/ingon/miniconda3/etc/profile.d/conda.sh; set +u; conda activate xrsplat; set -u
-export CUDA_HOME="$CONDA_PREFIX" TORCH_CUDA_ARCH_LIST="8.9" CC=/usr/bin/gcc-11 CXX=/usr/bin/g++-11
+source "$ROOT/scripts/env.sh"
 SCENE=ros2_bag2_home_rgbd_orbframe
 
 # 학습 인자는 현 default 자산과 동일 고정(apples-to-apples). 변수는 strategy/cap_max뿐.

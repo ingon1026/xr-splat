@@ -6,9 +6,9 @@
 #   출력: outputs/ros2_bag2_home_rgbd_orbframe/reloc7030/{tri,registered,ref_names.txt,query_names.txt,ref_orb/}
 set -eo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-COLMAP=/home/ingon/miniconda3/envs/colmap/bin/colmap
-export LD_LIBRARY_PATH=/home/ingon/miniconda3/envs/colmap/lib
-P=/home/ingon/miniconda3/envs/xrsplat/bin/python
+source "$ROOT/scripts/env.sh"
+COLMAP="$COLMAP_BIN"
+P="$XRSPLAT_PYTHON"
 PCT="${1:-70}"   # ref 비율(%)
 REF_MODEL="$ROOT/data/processed/ros2_bag2_home_rgbd_orbframe/colmap/sparse/0"
 RGB="$ROOT/data/processed/ros2_bag2_home_rgbd_orbframe/rgb"

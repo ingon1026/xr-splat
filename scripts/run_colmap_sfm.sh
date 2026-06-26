@@ -6,10 +6,10 @@
 set -eo pipefail
 SCENE="${1:?usage: run_colmap_sfm.sh <scene>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/scripts/env.sh"
 PROC="$ROOT/data/processed/$SCENE"
 OUT="$ROOT/outputs/$SCENE/colmap_sfm"
-COLMAP=/home/ingon/miniconda3/envs/colmap/bin/colmap
-export LD_LIBRARY_PATH=/home/ingon/miniconda3/envs/colmap/lib
+COLMAP="$COLMAP_BIN"
 mkdir -p "$OUT"
 DB="$OUT/database.db"; rm -f "$DB"
 RGB="$(readlink -f "$PROC/rgb")"
@@ -18,7 +18,7 @@ grep -v '^#' "$PROC/colmap/sparse/0/images.txt" | awk 'NR%2==1{print $10}' > "$O
 echo "[sfm] 키프레임 $(wc -l < "$OUT/image_list.txt")개 SfM 시작 $(date)"
 
 # 고정 intrinsics = depth가 정합된 TUM intrinsics (통제 비교: 포즈 추정만 비교, intrinsics·depth 일관)
-INTR=$(/home/ingon/miniconda3/envs/xrsplat/bin/python -c \
+INTR=$("$XRSPLAT_PYTHON" -c \
   "import json;d=json.load(open('$PROC/intrinsics.json'));print(f\"{d['fx']},{d['fy']},{d['cx']},{d['cy']}\")")
 echo "[sfm] 고정 intrinsics: $INTR"
 "$COLMAP" feature_extractor --database_path "$DB" --image_path "$RGB" \
