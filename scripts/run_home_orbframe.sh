@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # run_home_orbframe.sh — home orbframe(=snap 수정본) 05 게이트 → gsplat 재학습.
+# LEGACY: 단일 scene 빌드는 `python xrsplat.py build configs/<scene>.yaml`로 통합됨 (게이트·resume·결과팩 자동).
 #   전제: snap_scene_to_orb.py로 ros2_bag2_home_rgbd_orbframe 생성 완료(ORB 프레임 정합 확인됨).
 #   §2 게이트: 05 PASS 전 학습 금지 → FAIL이면 학습 진입 없이 종료.
 set -eo pipefail
