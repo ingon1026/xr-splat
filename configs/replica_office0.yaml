@@ -1,0 +1,30 @@
+# xr-splat scene config — Replica office0 (공개 데이터 검증, GT 완비)
+# 목적: 통합 파이프라인을 GT 있는 표준 벤치로 검증 — ATE(궤적) + PSNR(화질) 둘 다 GT 대조.
+# 01(dir replica 인제스트)은 수동 실행 → build가 associations.txt 보고 01 skip, 02-08 자동.
+scene: replica_office0
+
+input:
+  type: dir                            # 01은 수동(dir replica). build는 assoc.exists()로 skip.
+  path: /home/ingon/slam/SplaTAM/data/Replica/office0
+  depth_scale: 6553                    # Replica: png_value/6553.5 = m (intrinsics.json이 진실원)
+
+slam:
+  nfeatures: 1250
+
+validate:
+  enabled: true
+  baseline: [0.2, 0.6]
+  pass_cm: 3.0
+  crop: 0.6
+
+train:
+  strategy: mcmc
+  cap_max: 2000000
+  iters: 30000
+  depth_lambda: 0.2
+  holdout_every: 8
+  tag: mcmc2m
+
+postprocess:
+  opacity: 0.05
+  sh_out: 1
