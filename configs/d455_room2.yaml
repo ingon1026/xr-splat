@@ -19,7 +19,7 @@ validate:
 train:
   strategy: mcmc
   cap_max: 2000000
-  iters: 8000                          # 통합 검증 속도 (production은 30000)
+  iters: 30000                         # production 풀학습
   depth_lambda: 0.2
   holdout_every: 8
   tag: mcmc2m
