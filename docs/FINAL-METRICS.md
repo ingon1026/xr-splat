@@ -29,7 +29,7 @@ decoupled SLAM(ORB-SLAM3) × Gaussian(gsplat) 파이프라인. 모든 수치는 
 | 지표 | 값 |
 |---|---|
 | 전역 reloc 성공 | **100%** (hint 없이) |
-| 속도 | **26.7 FPS** (실시간 근처, 광도법 대비 8×) |
+| 속도 | **62.8 FPS** (voxel downsample로 26.7→62.8, 2.3×; 30FPS 초과 달성) |
 | render-vs-real (풀자산) | **28.3 PSNR** |
 
 **풀 28.8m 맵 전역**: non-KF 40개 전역 localize **40/40**, 28 FPS, render-vs-real 22 PSNR (밀도↔범위 trade-off). → 큰 공간 전역 작동 증명.
@@ -47,5 +47,5 @@ decoupled SLAM(ORB-SLAM3) × Gaussian(gsplat) 파이프라인. 모든 수치는 
 
 ## 남은 한계 (정직)
 - 자체 데이터 절대-cm GT 없음(mocap) → render-vs-real+궤적으로 증명. 절대 ATE는 TUM(M1=1.9cm)만.
-- 실시간 ~27 FPS(30 근접), 오프라인 리플레이 — 실물 HMD/VIO 미연결.
+- 실시간 62.8 FPS(30FPS 초과 달성), 오프라인 리플레이 — 실물 HMD/VIO 미연결.
 - 품질↔범위 trade-off: 풀 28.8m은 밀도 퍼져 soft(22). 둘 다 높이려면 더 촘촘히 캡처/학습.
