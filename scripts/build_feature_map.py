@@ -35,8 +35,10 @@ def load_associations(path):
         parts = line.strip().split()
         if len(parts) < 4:
             continue
-        rgb_stem  = parts[0]          # e.g. "68.021077"
-        depth_rel = parts[3]          # e.g. "depth/68.021077.png"
+        # 키는 rgb 파일명 stem (COLMAP images.txt name과 매칭). parts[0]=timestamp는
+        # 파일명≠timestamp인 scene(Replica: 000000.jpg vs ts 0.000000)에서 불일치 → 전 KF skip.
+        rgb_stem  = Path(parts[1]).stem   # "rgb/000000.jpg" → "000000"
+        depth_rel = parts[3]              # e.g. "depth/000000.png"
         assoc[rgb_stem] = depth_rel
     return assoc
 
