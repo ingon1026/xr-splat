@@ -76,9 +76,21 @@ than COLMAP's, confirming the SLAM poses are a sound foundation for Gaussian Spl
 
 **Milestone M2 — own D455 capture + runtime replay.** The best current asset is the home
 capture trained in the ORB frame with the MCMC strategy (`mcmc2m`): **27.96 PSNR / 0.871
-SSIM / 0.267 LPIPS** on 28 hold-out views. A COLMAP PnP relocalization replay also renders
-registered query poses directly in the Gaussian map frame. This is a runtime proof-of-concept,
-not yet a low-latency XR pose loop.
+SSIM / 0.267 LPIPS** on 28 hold-out views. A feature-PnP relocalizer renders registered query
+poses directly in the Gaussian map frame at **63 FPS** (voxel-downsampled feature map, 100 %
+global reloc), and the full-asset Gaussian render runs at **123 FPS** — both above the 90 Hz
+XR bar. Still an offline replay, not yet wired to a live headset.
+
+**Data is the quality ceiling.** Raising the Gaussian cap (2M → 3M) left hold-out PSNR
+unchanged, while running the *same pipeline* on clean synthetic data (Replica office0, GT
+poses) reached **45.35 dB** vs the D455 home's 27.96 dB — a **+17 dB** gap from data quality
+alone. Render quality is rate-limited by capture coverage and sensor noise (Replica also has
+exact depth and no motion blur), not by code or Gaussian count.
+
+| Asset | Data | Pose | Hold-out PSNR ↑ |
+|---|---|---|---|
+| home (`mcmc2m`) | D455 capture (real) | ORB-SLAM3 | 27.96 dB |
+| **replica_office0** | Replica (synthetic) | GT | **45.35 dB** |
 
 Demo `.ply` assets will be distributed via [GitHub Releases](../../releases).
 
@@ -191,7 +203,8 @@ data/ outputs/  gitignored — reproduced locally by running the pipeline
 - [x] **M1** — end-to-end on public dataset, ORB poses vs COLMAP poses ≤ 0.5 dB (Δ 0.13 dB)
 - [x] **M2** — own D455 home capture, ORB-frame Gaussian asset, MCMC quality pass
 - [x] **M3** — post-processing, results & teaser
-- [ ] **M4** — reproducible release, automated XR-ready asset report, runtime pose loop
+- [x] **M4a** — unified `xrsplat` CLI · automated XR-ready report · realtime localize (63 FPS) / render (123 FPS) · public-data validation (Replica 45 dB)
+- [ ] **M4b** — live headset pose loop · wider capture coverage
 
 ## License
 
