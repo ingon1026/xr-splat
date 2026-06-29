@@ -29,12 +29,30 @@ class PnPLocalizer(Localizer):
         feature_map_path: feature_map.npz 경로.
         K:                [3,3] float32 ndarray — query 이미지 intrinsics.
         device:           무시(CPU만 사용).
+        voxel:            맵 점 voxel downsample 크기(m). 0이면 비활성. 기본 0.05(매칭 4× 가속).
     """
 
-    def __init__(self, feature_map_path, K: np.ndarray, device=None):
+    def __init__(self, feature_map_path, K: np.ndarray, device=None,
+                 voxel: float = 0.05, min_pts: int = 15000):
         data = np.load(str(feature_map_path))
-        self.pts3d = data["points3d"]       # [N, 3] float32
-        self.map_desc = data["desc"]        # [N, 32] uint8
+        pts3d = data["points3d"]            # [N, 3] float32
+        desc  = data["desc"]               # [N, 32] uint8
+
+        # voxel downsample(공간 밀도 균일화) — brute-force knnMatch가 PnP의 82% 병목.
+        # voxel당 점 1개만 남겨 매칭 비용을 점수에 선형 비례해 절감.
+        # orbframe 실측: 82k→21k, 27→63 FPS, 전역 OK율 100% 유지, inlier min 74(>=20).
+        # 안전장치: 좁고 밀집한 scene(room2 0.65m)은 voxel이 핵심 점까지 합쳐 inlier가
+        #   게이트 밑으로 떨어진다(실측 OK 100→95%, inlier min 508→15). 다운샘플 결과가
+        #   min_pts 미만이면 적용을 포기하고 원본 유지 → 회귀 0, 주 scene만 가속.
+        # localize 전용 최적화(렌더 자산 무관). voxel=0 이면 비활성.
+        if voxel > 0:
+            keys = np.floor(pts3d / voxel).astype(np.int64)
+            _, idx = np.unique(keys, axis=0, return_index=True)
+            if len(idx) >= min_pts:
+                pts3d, desc = pts3d[idx], desc[idx]
+
+        self.pts3d = pts3d
+        self.map_desc = desc
 
         self.K    = K.astype(np.float32)
         self.dist = np.zeros(4, dtype=np.float32)
