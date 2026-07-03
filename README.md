@@ -6,6 +6,7 @@
 
 *Track with ORB-SLAM3. Render with gsplat. Share one coordinate frame.*
 
+[![Live Demo](https://img.shields.io/badge/🤗_Live_Demo-walk_the_room-ffcc4d)](https://huggingface.co/spaces/ingon1/xr-splat-demo)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![CUDA](https://img.shields.io/badge/CUDA-12.1-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
@@ -98,6 +99,8 @@ Every stage is an independent CLI communicating through standard on-disk formats
 | XR-ready verdict (automated) | home | **XR_READY** — frame integrity scale 0.999 / rot 0.054° |
 
 ¹ Replica is fed its ground-truth trajectory (pipeline stages 03→08); it isolates rendering quality from SLAM error.
+
+**👉 Try it yourself:** the Replica office0 asset (524k-Gaussian web export, 17 MB) is walkable in your browser — [🤗 Live Demo](https://huggingface.co/spaces/ingon1/xr-splat-demo). Client-side WebGL, no server GPU ([how it's deployed](docs/DEPLOY_HF.md)).
 
 ### Data is the quality ceiling
 
