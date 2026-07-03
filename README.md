@@ -16,17 +16,48 @@
 
 <img src="docs/assets/teaser.gif" alt="Fly-through of the reconstructed TUM fr1/desk scene (3D Gaussian Splatting)" width="85%">
 
-*Fly-through of the reconstructed **TUM fr1/desk** scene — gsplat, 30k iterations, frozen ORB-SLAM3 poses.*
+*Fly-through of the reconstructed **TUM fr1/desk** scene — gsplat, frozen ORB-SLAM3 poses.*
 
 </div>
 
 ---
 
+## What is this?
+
+**Scan a room once with a depth camera → get a photorealistic 3D copy you can re-enter later.**
+
+xr-splat turns a single RGB-D recording into two artifacts that live in **one shared coordinate system**:
+
+1. **A photorealistic 3D asset** — a Gaussian-Splatting `.ply` of the space, rendered at **123 FPS**.
+2. **An indoor "GPS" for that asset** — show it any new photo of the room and it answers *"this was taken exactly here"* at **63 FPS** on CPU, no initial guess needed, then re-renders the room from that exact spot.
+
+Why both together: an XR headset re-entering the space relocalizes against the map and draws the photoreal world from its true pose with **zero alignment steps** — the map used for *finding yourself* and the map used for *drawing the world* are the same frame by construction.
+
+| You provide | You get |
+|---|---|
+| One RGB-D recording — RealSense `.bag`, or a TUM / Replica dataset folder | `scene.ply` photoreal asset (+ compressed `_lite`) · localizer feature map · fly-through video & render gallery · quality metrics · an automated **XR-ready verdict** |
+
+## See it
+
+<div align="center">
+<img src="docs/assets/report/localize_to_render.png" alt="Query photo → PnP-estimated pose → Gaussian asset rendered at that pose" width="85%">
+
+*Frames the map has never seen (left) → feature-PnP finds each pose → the Gaussian asset rendered at that pose (right).*
+
+<br><br>
+
+<img src="docs/assets/report/home_gallery.png" alt="Real capture vs Gaussian render, D455 home asset" width="85%">
+
+*Real capture vs render — own D455 home asset, 27.96 dB median on held-out views.*
+</div>
+
+More evidence in [`docs/assets/report/`](docs/assets/report/): [full-map localization (28.8 m)](docs/assets/report/localization_full_map.png) · [merged-map summary](docs/assets/report/merged_map_summary.png) · [quality A/B (MCMC)](docs/assets/report/quality_mcmc_AB.png) · [runtime loop state machine](docs/assets/report/runtime_loop_state.png)
+
 ## Why decoupled?
 
 Coupled Gaussian-SLAM systems (SplaTAM, GS-SLAM, Photo-SLAM, LoopSplat) estimate pose **and** optimize the map on a single Gaussian representation, in real time. In our experiments this traded away everything at once: rendering quality below photorealistic, tracking weaker than mature SLAM, and slow runtimes.
 
-**xr-splat splits the two jobs.** ORB-SLAM3 does what it does best — accurate keyframe poses, loop closure, relocalization. gsplat does what it does best — offline, unconstrained photorealistic optimization. Because the Gaussian map is trained directly on SLAM poses, **both maps share one coordinate frame by construction**: at runtime, a relocalized pose drops straight into the Gaussian renderer with zero alignment steps.
+**xr-splat splits the two jobs.** ORB-SLAM3 does what it does best — accurate keyframe poses, loop closure, relocalization. gsplat does what it does best — offline, unconstrained photorealistic optimization. Because the Gaussian map is trained directly on SLAM poses (poses frozen, never in the optimizer), **both maps share one coordinate frame by construction**.
 
 ## Pipeline
 
@@ -50,15 +81,33 @@ flowchart LR
     H -.->|"scene.ply"| K
 ```
 
-Every stage is an independent CLI script communicating through standard on-disk formats (TUM, COLMAP) — swap any stage without touching the rest.
+Every stage is an independent CLI communicating through standard on-disk formats (TUM, COLMAP) — swap any stage without touching the rest. The orchestrator refuses to train until stage 05 pose validation **PASSes** and the frame-integrity check holds, so bad poses never silently become a blurry asset.
 
 ## Results
 
-**Milestone M1 — public-dataset end-to-end validation.** The decoupled pipeline is only as
-good as the poses it is fed, so we render the *same scene* twice — once from ORB-SLAM3 poses,
-once from COLMAP SfM poses — under an identical protocol and compare. The gap is **0.13 dB**
-(well within the ≤ 0.5 dB bar), and ORB-SLAM3's absolute trajectory error is actually *lower*
-than COLMAP's, confirming the SLAM poses are a sound foundation for Gaussian Splatting.
+### At a glance
+
+| What | Scene | Result |
+|---|---|---|
+| SLAM poses good enough for splatting? | TUM fr1/desk (mocap GT) | render gap vs COLMAP SfM **Δ0.13 dB**, ATE **1.9 cm** (beats COLMAP's 2.04) |
+| Photoreal quality — real capture | own D455 home | **27.96 dB PSNR** / 0.871 SSIM (28 held-out views) |
+| Photoreal quality — clean data | Replica office0 (GT poses¹) | **45.35 dB PSNR** / 0.991 SSIM (63 held-out views) |
+| Global relocalization (no pose hint) | home · full 28.8 m map | **100 %** (30/30 and 40/40 unseen frames) |
+| Localize speed | feature-PnP, CPU only | **62.8 FPS** (voxel-downsampled map, 2.3× speedup, zero accuracy loss) |
+| Render speed | 2M Gaussians @ 1280×720 | **123 FPS** on a single 12 GB consumer GPU (WSL2) |
+| XR-ready verdict (automated) | home | **XR_READY** — frame integrity scale 0.999 / rot 0.054° |
+
+¹ Replica is fed its ground-truth trajectory (pipeline stages 03→08); it isolates rendering quality from SLAM error.
+
+### Data is the quality ceiling
+
+Raising the Gaussian cap (2M → 3M) left hold-out PSNR unchanged (27.96 → 27.87), while running the *same pipeline, same cap, same iterations* on clean synthetic data reached **45.35 dB vs 27.96 dB — a +17 dB gap from data alone**. Render quality is rate-limited by capture coverage and sensor quality (exact depth, no motion blur), not by code or Gaussian count. Want a prettier asset? Capture better data.
+
+<details>
+<summary><b>M1 — ORB-SLAM3 poses vs COLMAP SfM, public dataset with mocap GT</b></summary>
+<br>
+
+The decoupled pipeline is only as good as the poses it is fed, so we render the *same scene* twice — once from ORB-SLAM3 poses, once from COLMAP SfM poses — under an identical protocol and compare.
 
 | Pose source | PSNR ↑ | SSIM ↑ | LPIPS ↓ | ATE ↓ |
 |---|---|---|---|---|
@@ -66,31 +115,23 @@ than COLMAP's, confirming the SLAM poses are a sound foundation for Gaussian Spl
 | **ORB-SLAM3 (ours)** | 23.85 | 0.834 | 0.207 | **1.89 cm** |
 | Δ | **0.13** | 0.002 | 0.009 | — |
 
-> Scene: **TUM RGB-D fr1/desk**. Both models trained with the identical protocol — gsplat
-> **15k iterations**, `--refine-stop 7000` (densification stop) + means grad-clip, dense
-> depth supervision. Evaluated on a **common 16-view hold-out** (every 8th keyframe, same
-> indices for both, intersection only). PSNR/SSIM/LPIPS are the **per-view median**
-> (worst-view PSNR: ORB 20.22 / COLMAP 20.11). ATE is the Sim(3)-aligned RMSE of keyframe
-> centers against TUM `groundtruth.txt`. Reproduce with
-> [`scripts/07_evaluate.py`](scripts/07_evaluate.py) (writes `outputs/<scene>/eval_m1.json`).
+> Scene: **TUM RGB-D fr1/desk**. Identical training protocol, common 16-view hold-out, per-view median. ATE is Sim(3)-aligned RMSE against TUM `groundtruth.txt` — the only absolute-accuracy proof (own captures have no mocap). Reproduce with [`scripts/07_evaluate.py`](scripts/07_evaluate.py).
 
-**Milestone M2 — own D455 capture + runtime replay.** The best current asset is the home
-capture trained in the ORB frame with the MCMC strategy (`mcmc2m`): **27.96 PSNR / 0.871
-SSIM / 0.267 LPIPS** on 28 hold-out views. A feature-PnP relocalizer renders registered query
-poses directly in the Gaussian map frame at **63 FPS** (voxel-downsampled feature map, 100 %
-global reloc), and the full-asset Gaussian render runs at **123 FPS** — both above the 90 Hz
-XR bar. Still an offline replay, not yet wired to a live headset.
+</details>
 
-**Data is the quality ceiling.** Raising the Gaussian cap (2M → 3M) left hold-out PSNR
-unchanged, while running the *same pipeline* on clean synthetic data (Replica office0, GT
-poses) reached **45.35 dB** vs the D455 home's 27.96 dB — a **+17 dB** gap from data quality
-alone. Render quality is rate-limited by capture coverage and sensor noise (Replica also has
-exact depth and no motion blur), not by code or Gaussian count.
+<details>
+<summary><b>Merged-map evidence — why one shared frame actually holds</b></summary>
+<br>
 
-| Asset | Data | Pose | Hold-out PSNR ↑ |
-|---|---|---|---|
-| home (`mcmc2m`) | D455 capture (real) | ORB-SLAM3 | 27.96 dB |
-| **replica_office0** | Replica (synthetic) | GT | **45.35 dB** |
+Numbers from [`docs/FINAL-METRICS.md`](docs/FINAL-METRICS.md) / [`docs/MERGED-MAP-RESULTS.md`](docs/MERGED-MAP-RESULTS.md), all measured on the home asset:
+
+- **Pose tolerance** — renders punish pose error hard: 1° rotation costs **−7 dB**, 1 cm costs −2.8 dB. This sets the localizer budget (< 1°, ~1 cm) — and the localizers below meet it.
+- **Gaussian self-relocalization** — photometric optimization against the asset refines a 5 cm / 3° perturbation to **0.18 cm / 0.05°** (10/10 converged).
+- **Convergence basin** — photometric relocalization succeeds from up to 20 cm / 12° initial error (75 %).
+- **Operating envelope (70/30 split)** — *inside* captured space: localize ✓ render ✓; *outside*: localization still generalizes (SfM 0.73 cm) but rendering does not extrapolate (10 dB). Capture coverage is the product spec.
+- **Runtime loop** — 40-frame tracking replay, 40/40 OK, OK/LOST state machine.
+
+</details>
 
 Demo `.ply` assets will be distributed via [GitHub Releases](../../releases).
 
@@ -120,81 +161,82 @@ bash third_party/build_orbslam3.sh   # applies repo patches, then builds
 
 </details>
 
-## Usage
+## Quickstart
 
-### Unified CLI (recommended)
-
-One entry point drives the whole thing via a per-scene config (`configs/<scene>.yaml`):
+One config file per scene is the single source of truth (input path, per-stage knobs, output tags). Copy an example and point it at your recording:
 
 ```bash
-# Offline: build the asset end-to-end (01→08, gated, resumable) + XR-readiness report.
-# Re-running skips already-completed stages (idempotent); --force re-runs.
-python xrsplat.py build configs/<scene>.yaml
+cp configs/d455_room2.yaml configs/myroom.yaml   # edit: scene name + input.path
 
-python xrsplat.py report   <scene>                 # XR-ready gate verdict
-python xrsplat.py view     <scene> [--port 8080]   # 3D Gaussian viewer (browser)
-python xrsplat.py localize <scene> <query.png> --render-out out.png   # locate one frame + render at found pose
-python xrsplat.py run      <scene> <frames_dir>    # localize→render loop over a frame stream
+# Build everything: 01→08, gated, resumable. Re-runs skip finished stages; --force redoes.
+python xrsplat.py build configs/myroom.yaml
+
+# Look at it
+python xrsplat.py view myroom                    # 3D Gaussian viewer in the browser
+
+# Re-enter it: where was this photo taken? → pose + render at that pose
+python xrsplat.py localize myroom photo.png --render-out here.png
 ```
 
-A scene config (`pipeline/config.py` schema) is the single source of truth for input,
-per-stage knobs (validate thresholds, train strategy/cap, postprocess) and paths.
+Everything lands in `outputs/myroom/`: the asset (`gsplat_mcmc2m/scene.ply` + `_lite`), a results pack (`results/` — fly-through mp4, gallery, localization plots, metrics json) and an XR-readiness report.
 
-### Individual stages (still available)
+| Command | What it does |
+|---|---|
+| `build <config>` | full offline pipeline + report + results pack (idempotent resume) |
+| `showcase <scene>` | regenerate the results pack only (mp4 · gallery · plots · metrics) |
+| `report <scene>` | XR-ready gate verdict: `XR_READY` / `RENDER_ONLY` / `FRAME_INVALID` / `NEEDS_RECAPTURE` |
+| `view <scene>` | browser 3D viewer |
+| `localize <scene> <img>` | global relocalization for one frame (+ optional render at found pose) |
+| `run <scene> <dir>` | localize→render loop over a frame stream (OK/LOST state machine) |
+
+Public datasets work too — `scripts/01_extract_bag.py dir --dataset tum|replica` ingests TUM RGB-D and Replica folders into the same layout ([`data/README.md`](data/README.md)).
+
+<details>
+<summary><b>Individual stages (each an independent CLI)</b></summary>
+<br>
 
 ```bash
-# 1. Extract capture → TUM RGB-D layout (also accepts TUM/Replica datasets directly)
-python scripts/01_extract_bag.py bag \
-  --bag data/raw/room1.bag \
-  --out data/processed/room1
-
-# Public dataset example:
-# python scripts/01_extract_bag.py dir \
-#   --dataset tum --variant fr1 \
-#   --src /path/to/rgbd_dataset_freiburg1_desk \
-#   --out data/processed/tum_fr1_desk
-
-# 2. Run ORB-SLAM3 (headless) → keyframe poses + Atlas map
-bash scripts/02_run_orbslam3.sh room1
-
-# 3. Convert poses to COLMAP format (Twc→Tcw, quaternion reorder)
-python scripts/03_tum_to_colmap.py --scene room1
-
-# 4–5. Build init point cloud, then validate pose conversion  ← gate: must PASS
+python scripts/01_extract_bag.py bag --bag data/raw/room1.bag --out data/processed/room1
+bash   scripts/02_run_orbslam3.sh room1              # headless; poses + Atlas map
+python scripts/03_tum_to_colmap.py --scene room1     # Twc→Tcw, quaternion reorder
 python scripts/04_make_pointcloud.py --scene room1
-python scripts/05_validate_poses.py --scene room1
-
-# 6. Train gsplat (poses frozen, depth supervision on)
-bash scripts/06_train_gsplat.sh room1
-
-# Current best home-asset training path uses gsplat MCMC with a 2M Gaussian cap:
-# bash scripts/run_home_mcmc.sh
-
-# 7–8. Evaluate, then prune/compress for XR deployment
+python scripts/05_validate_poses.py --scene room1    # ← gate: must PASS before training
+bash   scripts/06_train_gsplat.sh room1              # poses frozen, depth supervision
 python scripts/07_evaluate.py --scene room1
-python scripts/08_postprocess.py --scene room1
+python scripts/08_postprocess.py --scene room1       # prune + SH compress for deployment
 ```
 
-Data and outputs are **not** stored in this repo — see [`data/README.md`](data/README.md) for how to obtain public datasets (TUM RGB-D, Replica) or capture your own.
+Legacy per-scene `run_*.sh` drivers still exist but `xrsplat.py build` supersedes them.
 
-**Training framework (Phase 5):** gsplat (`rasterization` + `DefaultStrategy` or
-`MCMCStrategy`) with a custom dense-depth loss. Chosen over nerfstudio splatfacto because
-neither ships turnkey dense per-pixel depth supervision for Gaussians (gsplat exposes depth
-rendering; splatfacto's depth loss is nerfacto-only), and gsplat is lighter, pre-verified on
-torch 2.1.2/cu121, and loads COLMAP directly. Camera poses stay **frozen** — no pose tensors
-in the optimizer (decoupled by design). For the current D455 home asset, `MCMCStrategy` with a
-2M Gaussian cap is the adopted path because it improved placement/quality without increasing
-the final Gaussian count.
+</details>
+
+<details>
+<summary><b>Training framework notes</b></summary>
+<br>
+
+gsplat (`rasterization` + `MCMCStrategy`) with a custom dense-depth loss. Chosen over nerfstudio splatfacto because neither ships turnkey dense per-pixel depth supervision for Gaussians, and gsplat is lighter, pre-verified on torch 2.1.2/cu121, and loads COLMAP directly. Camera poses stay **frozen** — no pose tensors in the optimizer (decoupled by design). `MCMCStrategy` with a 2M Gaussian cap is the adopted path: +4.1 dB over the default strategy at the same budget (23.82 → 27.96).
+
+</details>
+
+## Honest limitations
+
+- **Offline replay, not a live headset yet.** The runtime loop replays recorded frames; wiring a real HMD/VIO stream is the next milestone (M4b).
+- **You can only render where you captured.** Free-orbit works inside the captured viewing cone; a narrow capture (e.g. a 0.65 m sweep) shows floaters from un-captured angles — that's missing data, not a broken asset. View narrow scenes via the generated fly-through.
+- **Quality ceiling = your capture.** Proven twice: raising the Gaussian cap changes nothing, cleaner data adds +17 dB. Code and hyperparameters won't buy more.
+- **Absolute accuracy is proven on TUM only** (1.9 cm ATE vs mocap). Own captures have no ground truth; they are validated by render-vs-real quality, geometric pose validation, and frame-integrity checks instead.
 
 ## Repository structure
 
 ```
-configs/        ORB-SLAM3 & training configs (auto-generated from capture intrinsics)
-scripts/        pipeline stages 01–08, each an independent CLI
-pipeline/       shared modules (format conversion, geometry utils)
-third_party/    ORB-SLAM3 as a git submodule + build patches
-docs/           research notes, capture guide, README assets
-data/ outputs/  gitignored — reproduced locally by running the pipeline
+xrsplat.py       single CLI entry point (build · showcase · report · view · localize · run)
+pipeline/        config schema (per-scene yaml) · gated resumable orchestrator ·
+                 MergedMap runtime API (localize/render/run) · geometry & IO modules
+scripts/         pipeline stages 01–08 + localizers, benchmarks, reports, showcase
+configs/         one yaml per scene — the single source of truth
+tests/ + pytest  28 tests, run without gsplat or a GPU (CI-friendly by design)
+third_party/     ORB-SLAM3 as a git submodule + build patches
+docs/            FINAL-METRICS.md · operating & capture guides · report assets · decks
+data/ outputs/   gitignored — reproduced locally by running the pipeline
 ```
 
 ## Roadmap
