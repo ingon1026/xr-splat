@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Decoupled SLAM × Gaussian Splatting, rendered in your browser
+short_description: Decoupled SLAM x Gaussian Splatting in your browser
 ---
 
 # xr-splat demo

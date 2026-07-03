@@ -7,7 +7,7 @@
   3. <hf-id>/xr-splat-demo (Space, sdk=static) 생성 + 업로드
 렌더링은 방문자 브라우저(WebGL) — 서버 GPU 불필요, 무료 Static Space.
 
-사전 조건: `huggingface-cli login` (write 토큰) 1회.
+사전 조건: `hf auth login` (write 토큰) 1회.
 
 usage:
   python scripts/10_deploy_hf.py --hf-id <username> [--scene replica_office0]

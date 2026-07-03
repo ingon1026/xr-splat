@@ -14,7 +14,7 @@ datasets/<id>/xr-splat-assets  ←─fetch──  spaces/<id>/xr-splat-demo
 
 ```bash
 # 0) 최초 1회: https://huggingface.co/settings/tokens 에서 write 토큰 발급 후
-huggingface-cli login
+hf auth login          # (구 huggingface-cli login — hub 1.21+에서 `hf`로 개명됨)
 
 # 1) 웹 자산 변환 (.ply → .splat, ~17MB)
 python scripts/09_export_web.py --scene replica_office0
