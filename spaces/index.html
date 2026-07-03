@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>xr-splat — walk a SLAM-built photoreal room</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+
+  .panel { position: fixed; color: #e6e9f0; background: rgba(11,13,18,.72); backdrop-filter: blur(6px);
+           border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+  #info  { left: 12px; bottom: 12px; max-width: 78vw; }
+  #info b { color: #fff; }
+  #info .dim { color: #9aa3b2; }
+  #repo  { right: 12px; top: 12px; text-decoration: none; color: #e6e9f0; font-weight: 600; }
+  #repo:hover { border-color: rgba(255,255,255,.3); }
+  #hint  { left: 50%; bottom: 18px; transform: translateX(-50%); color: #9aa3b2; transition: opacity 1s; pointer-events: none; }
+
+  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center;
+            color: #e6e9f0; background: #0b0d12; z-index: 10; }
+  #bar-track { width: min(420px, 70vw); height: 6px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; }
+  #bar { width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); border-radius: 3px; transition: width .15s; }
+  #pct { font-variant-numeric: tabular-nums; color: #9aa3b2; font-size: 13px; }
+  #err { color: #fca5a5; font-size: 13px; max-width: 70vw; text-align: center; display: none; }
+
+  @media (max-width: 600px) {
+    .panel { font-size: 11px; padding: 8px 10px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div style="font-weight:700; font-size:17px">xr-splat demo</div>
+  <div style="color:#9aa3b2; font-size:13px">Replica office0 · 524k Gaussians · ~17 MB</div>
+  <div id="bar-track"><div id="bar"></div></div>
+  <div id="pct">0%</div>
+  <div id="err"></div>
+</div>
+
+<div id="info" class="panel">
+  <b>replica_office0</b> — 524,364 Gaussians (web asset)<br>
+  <span class="dim">45.35 dB PSNR on held-out views (full asset) · trained on frozen ORB-SLAM3-frame poses + gsplat</span><br>
+  <span class="dim">decoupled SLAM × Gaussian Splatting — one shared coordinate frame</span>
+</div>
+
+<a id="repo" class="panel" href="https://github.com/ingon1026/xr-splat" target="_blank" rel="noopener">GitHub ↗</a>
+
+<div id="hint" class="panel">drag orbit · wheel zoom · right-drag/WASD move · touch OK</div>
+
+<script type="module">
+// gsplat.js (huggingface/gsplat.js) via CDN — 선택 이유: .splat 직로드 + OrbitControls에
+// 마우스/휠/터치/WASD 내장, ESM 한 줄 import(빌드 불필요), HF 프로젝트라 Spaces와 궁합.
+// 버전 고정(1.2.9) — @latest는 재현성 깨짐.
+import * as SPLAT from "https://cdn.jsdelivr.net/npm/gsplat@1.2.9/+esm";
+
+// ── 자산 URL ──────────────────────────────────────────────────────────────
+// 배포: scripts/10_deploy_hf.py 가 __HF_ID__ 를 실제 HF 계정으로 치환해 업로드.
+// 로컬 테스트: ?url=/outputs/replica_office0/web/replica_office0.splat 로 오버라이드.
+const DEFAULT_URL = "https://huggingface.co/datasets/__HF_ID__/xr-splat-assets/resolve/main/replica_office0.splat";
+const url = new URLSearchParams(location.search).get("url") || DEFAULT_URL;
+
+// ── 초기 카메라 (09_export_web.py 리포트 값 하드코딩) ─────────────────────
+const TARGET = new SPLAT.Vector3(0.759, -0.746, -0.365);  // gaussian median center
+const RADIUS = 3.2;                                        // extent 7.75m 실내라 씬 안쪽에서 시작
+
+const scene = new SPLAT.Scene();
+const camera = new SPLAT.Camera();
+const renderer = new SPLAT.WebGLRenderer();
+const controls = new SPLAT.OrbitControls(camera, renderer.canvas, 0.6, -0.3, RADIUS, true, TARGET);
+controls.maxZoom = 12;
+
+const bar = document.getElementById("bar"), pct = document.getElementById("pct");
+const loaderEl = document.getElementById("loader"), errEl = document.getElementById("err");
+
+async function main() {
+  try {
+    await SPLAT.Loader.LoadAsync(url, scene, (p) => {
+      bar.style.width = `${(p * 100).toFixed(0)}%`;
+      pct.textContent = `${(p * 100).toFixed(0)}%`;
+    });
+  } catch (e) {
+    errEl.style.display = "block";
+    errEl.textContent = `자산 로드 실패: ${e.message || e} — URL 확인 (?url= 파라미터로 오버라이드 가능): ${url}`;
+    throw e;
+  }
+  loaderEl.style.display = "none";
+
+  // 컨트롤 힌트 5초 후 페이드
+  setTimeout(() => { document.getElementById("hint").style.opacity = "0"; }, 5000);
+
+  const frame = () => {
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+const handleResize = () => renderer.setSize(window.innerWidth, window.innerHeight);
+addEventListener("resize", handleResize);
+handleResize();
+
+main();
+</script>
+</body>
+</html>

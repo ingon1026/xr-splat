@@ -33,3 +33,5 @@ dependencies:
       - "setuptools<70"
       - gsplat
       - pytorch-msssim
+      # --- Phase 9-10 웹 데모 배포 (HF Spaces static) ---
+      - huggingface_hub
